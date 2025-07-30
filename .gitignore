@@ -1,0 +1,103 @@
+# Go编译产物
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go构建目录
+bin/
+dist/
+build/
+
+# Go模块缓存
+go.sum
+
+# 二进制文件
+agent/agent
+broker/broker
+visualization/visualization
+
+# IDE和编辑器文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统生成的文件
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 日志文件
+*.log
+logs/
+
+# 临时文件
+*.tmp
+*.temp
+temp/
+tmp/
+
+# 配置文件（包含敏感信息）
+.env
+.env.local
+.env.production
+.env.development
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# Redis dump文件
+dump.rdb
+
+# 协议缓冲区生成的临时文件
+*.pb.go.tmp
+
+# 测试覆盖率报告
+coverage.out
+coverage.html
+
+# 依赖目录
+vendor/
+
+# 证书和密钥文件
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# 压缩文件
+*.zip
+*.tar.gz
+*.rar
+
+# 备份文件
+*.bak
+*.backup
+
+# 本地配置文件
+configs/local.yaml
+configs/dev.yaml
+
+# 监控数据文件
+data/
+metrics/
+
+# 缓存目录
+.cache/
+cache/
+
+# 运行时文件
+*.pid
+*.sock 

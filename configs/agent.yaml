@@ -1,0 +1,41 @@
+# 数据采集代理配置
+
+# 代理基本配置
+agent:
+  host_id: "host-1"
+  hostname: "localhost"
+  ip: "127.0.0.1"
+
+# 采集配置
+collect:
+  interval: 5s
+  batch_size: 50
+  max_retry: 3
+  metrics:
+    - cpu
+    - memory
+    - disk
+    - network
+
+# 中转层配置
+broker:
+  endpoints:
+    - "localhost:9090"
+  timeout: 5s
+
+# 日志配置
+log:
+  level: "info"
+  path: "logs/agent.log"
+  max_size: 10
+  max_backups: 3
+  max_age: 7
+  compress: true
+
+# 高级配置
+advanced:
+  ring_buffer_size: 1000
+  bloom_filter_size: 10000
+  bloom_filter_fp_rate: 0.01
+  time_wheel_tick: 100
+  time_wheel_buckets: 60 

@@ -1,0 +1,47 @@
+# 分布式消息中转层配置
+
+# 节点配置
+node:
+  id: "broker-1"
+  address: "localhost:9090"
+
+# 集群配置
+cluster:
+  endpoints:
+    - "localhost:9090"
+    - "localhost:9091"
+    - "localhost:9092"
+
+# Raft配置
+raft:
+  log_dir: "data/raft/logs"
+  snapshot_dir: "data/raft/snapshots"
+  heartbeat_timeout: 1s
+  election_timeout: 1s
+
+# 存储配置
+storage:
+  redis:
+    addr: "localhost:6379"
+    password: ""
+    db: 0
+
+# 一致性哈希配置
+hash:
+  virtual_nodes: 10
+
+# gRPC配置
+grpc:
+  port: 9090
+  max_recv_msg_size: 4194304  # 4MB
+  max_send_msg_size: 4194304  # 4MB
+
+# 日志配置
+log:
+  level: "info"
+  format: "json"
+  output: "logs/broker.log"
+
+# 高级配置
+advanced:
+  buffer_size: 1000 
