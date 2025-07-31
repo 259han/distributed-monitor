@@ -118,7 +118,7 @@ func (c *GRPCClient) SendMetrics(ctx context.Context, metrics []models.MetricsDa
 		for _, m := range data.Metrics {
 			pbMetrics = append(pbMetrics, &pb.Metric{
 				Name:  m.Name,
-				Value: m.Value,
+				Value: fmt.Sprintf("%.2f", m.Value),
 				Unit:  m.Unit,
 			})
 		}

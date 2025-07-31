@@ -21,7 +21,7 @@ type TimeWheel struct {
 	addTaskChan   chan *taskElement            // 添加任务通道
 	stopChan      chan struct{}                // 停止通道
 	taskMap       map[interface{}]*taskElement // 任务映射，用于快速查找任务
-	mu            sync.Mutex                   // 互斥锁
+	mu            sync.RWMutex                  // 读写锁
 	nextTimeWheel *TimeWheel                   // 下一级时间轮
 }
 
@@ -102,6 +102,35 @@ func (tw *TimeWheel) RemoveTask(key interface{}) {
 		element.removed = true
 		delete(tw.taskMap, key)
 	}
+	
+	// 如果有下一级时间轮，也尝试移除
+	if tw.nextTimeWheel != nil {
+		tw.nextTimeWheel.RemoveTask(key)
+	}
+}
+
+// HasTask 检查任务是否存在
+func (tw *TimeWheel) HasTask(key interface{}) bool {
+	tw.mu.RLock()
+	defer tw.mu.RUnlock()
+	
+	_, exists := tw.taskMap[key]
+	if !exists && tw.nextTimeWheel != nil {
+		return tw.nextTimeWheel.HasTask(key)
+	}
+	return exists
+}
+
+// GetTaskCount 获取任务数量
+func (tw *TimeWheel) GetTaskCount() int {
+	tw.mu.RLock()
+	defer tw.mu.RUnlock()
+	
+	count := len(tw.taskMap)
+	if tw.nextTimeWheel != nil {
+		count += tw.nextTimeWheel.GetTaskCount()
+	}
+	return count
 }
 
 // run 运行时间轮

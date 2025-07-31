@@ -6,6 +6,7 @@ toolchain go1.24.5
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.2.3
+	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.3
 	github.com/han-fei/monitor/proto v0.0.0-00010101000000-000000000000
 	github.com/hashicorp/raft v1.7.3
@@ -13,6 +14,7 @@ require (
 	github.com/quic-go/quic-go v0.54.0
 	github.com/redis/go-redis/v9 v9.11.0
 	github.com/willf/bloom v2.0.3+incompatible
+	golang.org/x/crypto v0.38.0
 	google.golang.org/grpc v1.74.2
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -35,7 +37,6 @@ require (
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/willf/bitset v1.1.11 // indirect
 	go.uber.org/mock v0.5.0 // indirect
-	golang.org/x/crypto v0.38.0 // indirect
 	golang.org/x/mod v0.18.0 // indirect
 	golang.org/x/net v0.40.0 // indirect
 	golang.org/x/sync v0.14.0 // indirect
@@ -46,4 +47,4 @@ require (
 	google.golang.org/protobuf v1.36.6 // indirect
 )
 
-replace github.com/han-fei/monitor/proto => ./proto/github.com/han-fei/monitor/proto
+replace github.com/han-fei/monitor/proto => ./proto

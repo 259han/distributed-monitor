@@ -10,6 +10,14 @@ service MonitorService {
   rpc SendMetrics(stream MetricsData) returns (MetricsResponse) {}
   // 获取监控数据
   rpc GetMetrics(MetricsRequest) returns (stream MetricsData) {}
+  // 保存指标数据
+  rpc SaveMetrics(SaveMetricsRequest) returns (SaveMetricsResponse) {}
+  // 获取指标历史数据
+  rpc GetMetricsHistory(GetMetricsHistoryRequest) returns (GetMetricsHistoryResponse) {}
+  // 获取指标统计信息
+  rpc GetMetricsStats(GetMetricsStatsRequest) returns (GetMetricsStatsResponse) {}
+  // 删除指标数据
+  rpc DeleteMetrics(DeleteMetricsRequest) returns (DeleteMetricsResponse) {}
 }
 
 // Raft服务
@@ -25,13 +33,20 @@ message MetricsData {
   string host_id = 1;
   int64 timestamp = 2;
   repeated Metric metrics = 3;
+  repeated Tag tags = 4;
 }
 
 // 单个指标
 message Metric {
   string name = 1;
-  double value = 2;
+  string value = 2;
   string unit = 3;
+}
+
+// 标签
+message Tag {
+  string key = 1;
+  string value = 2;
 }
 
 // 监控数据请求
@@ -44,6 +59,70 @@ message MetricsRequest {
 
 // 监控数据响应
 message MetricsResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// 保存指标数据请求
+message SaveMetricsRequest {
+  string host_id = 1;
+  int64 timestamp = 2;
+  repeated Metric metrics = 3;
+  repeated Tag tags = 4;
+}
+
+// 保存指标数据响应
+message SaveMetricsResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// 获取指标历史数据请求
+message GetMetricsHistoryRequest {
+  string host_id = 1;
+  int64 start_time = 2;
+  int64 end_time = 3;
+}
+
+// 获取指标历史数据响应
+message GetMetricsHistoryResponse {
+  bool success = 1;
+  repeated MetricsData data = 2;
+  string message = 3;
+}
+
+// 获取指标统计信息请求
+message GetMetricsStatsRequest {
+  string host_id = 1;
+  int64 start_time = 2;
+  int64 end_time = 3;
+  int64 interval = 4;
+}
+
+// 指标统计信息
+message MetricStats {
+  uint64 count = 1;
+  double sum = 2;
+  double avg = 3;
+  double min = 4;
+  double max = 5;
+}
+
+// 获取指标统计信息响应
+message GetMetricsStatsResponse {
+  bool success = 1;
+  map<string, MetricStats> stats = 2;
+  string message = 3;
+}
+
+// 删除指标数据请求
+message DeleteMetricsRequest {
+  string host_id = 1;
+  int64 timestamp = 2;
+}
+
+// 删除指标数据响应
+message DeleteMetricsResponse {
   bool success = 1;
   string message = 2;
 }
@@ -92,4 +171,4 @@ enum EntryType {
   COMMAND = 0;
   CONFIGURATION = 1;
   NOOP = 2;
-} 
+}

@@ -1,6 +1,7 @@
 package algorithm
 
 import (
+	"fmt"
 	"hash/fnv"
 	"sync"
 
@@ -143,5 +144,5 @@ func generateAlertKey(hostID, metricName string, timestamp int64) string {
 	// 使用时间戳的小时部分，这样可以让相同的告警在一小时后可以再次触发
 	hourTimestamp := timestamp / 3600
 
-	return hostID + ":" + metricName + ":" + string(hourTimestamp)
+	return hostID + ":" + metricName + ":" + fmt.Sprintf("%d", hourTimestamp)
 }

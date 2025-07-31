@@ -1,10 +1,23 @@
 package collector
 
+/*
+#cgo CFLAGS: -I../c
+#cgo LDFLAGS: -lpthread
+#include "ring_buffer.h"
+#include <stdlib.h>
+#include <string.h>
+*/
+import "C"
+
 import (
 	"context"
+	"fmt"
+	"log"
 	"sync"
 	"time"
+	"unsafe"
 
+	"github.com/han-fei/monitor/agent/internal/c"
 	"github.com/han-fei/monitor/agent/internal/config"
 	"github.com/han-fei/monitor/agent/internal/models"
 	"github.com/han-fei/monitor/agent/internal/service"
@@ -19,30 +32,41 @@ type Collector interface {
 
 // MetricsCollector 指标采集器
 type MetricsCollector struct {
-	config      *config.Config
-	collectors  map[string]Collector
-	metricsChan chan models.MetricsData
-	wg          sync.WaitGroup
-	mu          sync.Mutex
-	stopCh      chan struct{}
-	hostInfo    models.HostInfo
-	grpcClient  *service.GRPCClient
+	config         *config.Config
+	collectors     map[string]Collector
+	metricsBuffer  *c.SimpleMetricsRingBuffer
+	wg             sync.WaitGroup
+	mu             sync.Mutex
+	stopCh         chan struct{}
+	hostInfo       models.HostInfo
+	grpcClient     *service.GRPCClient
+	useCRingBuffer bool // 是否使用C ring buffer
 }
 
 // NewMetricsCollector 创建新的指标采集器
 func NewMetricsCollector(cfg *config.Config) *MetricsCollector {
-	return &MetricsCollector{
-		config:      cfg,
-		collectors:  make(map[string]Collector),
-		metricsChan: make(chan models.MetricsData, cfg.Advanced.RingBufferSize),
-		stopCh:      make(chan struct{}),
+	mc := &MetricsCollector{
+		config:     cfg,
+		collectors: make(map[string]Collector),
+		stopCh:     make(chan struct{}),
 		hostInfo: models.HostInfo{
 			ID:       cfg.Agent.HostID,
 			Hostname: cfg.Agent.Hostname,
 			IP:       cfg.Agent.IP,
 		},
-		grpcClient: service.NewGRPCClient(cfg),
+		grpcClient:     service.NewGRPCClient(cfg),
+		useCRingBuffer: true, // 默认使用C ring buffer
 	}
+
+	// 初始化C ring buffer
+	mc.metricsBuffer = c.NewSimpleMetricsRingBuffer(cfg.Advanced.RingBufferSize, true)
+	if mc.metricsBuffer == nil {
+		// 如果C ring buffer创建失败，回退到Go channel
+		mc.useCRingBuffer = false
+		log.Printf("警告：C ring buffer创建失败，回退到Go channel")
+	}
+
+	return mc
 }
 
 // RegisterCollector 注册采集器
@@ -93,6 +117,11 @@ func (mc *MetricsCollector) Stop() error {
 		return err
 	}
 
+	// 关闭C ring buffer
+	if mc.useCRingBuffer && mc.metricsBuffer != nil {
+		mc.metricsBuffer.Close()
+	}
+
 	// 等待所有协程退出
 	mc.wg.Wait()
 	return nil
@@ -122,13 +151,15 @@ func (mc *MetricsCollector) collectMetrics() {
 	var allMetrics []models.Metric
 
 	// 从每个采集器获取指标
-	for _, collector := range mc.collectors {
+	for name, collector := range mc.collectors {
 		metrics, err := collector.Collect()
 		if err != nil {
 			// 记录错误，但继续采集其他指标
+			log.Printf("采集%s指标失败: %v", name, err)
 			continue
 		}
 		allMetrics = append(allMetrics, metrics...)
+		log.Printf("成功采集%s指标，数量: %d", name, len(metrics))
 	}
 
 	// 创建指标数据
@@ -138,12 +169,17 @@ func (mc *MetricsCollector) collectMetrics() {
 		Metrics:   allMetrics,
 	}
 
-	// 发送到通道
-	select {
-	case mc.metricsChan <- metricsData:
-		// 成功发送
-	default:
-		// 通道已满，丢弃数据
+	// 发送到buffer
+	if mc.useCRingBuffer {
+		// 使用C ring buffer处理数据
+		if err := mc.sendToCRingBuffer(metricsData); err != nil {
+			log.Printf("发送到C ring buffer失败: %v", err)
+			// 回退到直接处理
+			mc.processBatchDirectly(metricsData)
+		}
+	} else {
+		// 使用Go channel方式（简化实现）
+		mc.processBatchDirectly(metricsData)
 	}
 }
 
@@ -151,8 +187,6 @@ func (mc *MetricsCollector) collectMetrics() {
 func (mc *MetricsCollector) processLoop(ctx context.Context) {
 	defer mc.wg.Done()
 
-	// 批处理缓冲区
-	buffer := make([]models.MetricsData, 0, mc.config.Collect.BatchSize)
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -162,20 +196,10 @@ func (mc *MetricsCollector) processLoop(ctx context.Context) {
 			return
 		case <-mc.stopCh:
 			return
-		case data := <-mc.metricsChan:
-			// 添加到缓冲区
-			buffer = append(buffer, data)
-
-			// 如果缓冲区已满，处理批量数据
-			if len(buffer) >= mc.config.Collect.BatchSize {
-				mc.processBatch(ctx, buffer)
-				buffer = buffer[:0] // 清空缓冲区
-			}
 		case <-ticker.C:
-			// 定时处理批量数据，避免数据长时间不处理
-			if len(buffer) > 0 {
-				mc.processBatch(ctx, buffer)
-				buffer = buffer[:0] // 清空缓冲区
+			// 从C ring buffer中处理数据
+			if mc.useCRingBuffer {
+				mc.processFromCRingBuffer()
 			}
 		}
 	}
@@ -186,10 +210,162 @@ func (mc *MetricsCollector) processBatch(ctx context.Context, batch []models.Met
 	// 发送数据到中转层
 	if err := mc.grpcClient.SendMetricsWithRetry(ctx, batch); err != nil {
 		// 记录错误，但不中断处理
+		log.Printf("发送批量数据失败: %v", err)
 	}
 }
 
-// GetMetricsChannel 获取指标通道，用于测试
-func (mc *MetricsCollector) GetMetricsChannel() <-chan models.MetricsData {
-	return mc.metricsChan
+// processBatchDirectly 直接处理单个MetricsData
+func (mc *MetricsCollector) processBatchDirectly(data models.MetricsData) {
+	// 发送数据到中转层
+	ctx := context.Background()
+	if err := mc.grpcClient.SendMetricsWithRetry(ctx, []models.MetricsData{data}); err != nil {
+		// 记录错误，但不中断处理
+		log.Printf("发送数据失败: %v", err)
+	}
+}
+
+// sendToCRingBuffer 发送数据到C ring buffer
+func (mc *MetricsCollector) sendToCRingBuffer(data models.MetricsData) error {
+	if mc.metricsBuffer == nil {
+		return fmt.Errorf("C ring buffer未初始化")
+	}
+
+	// 将Go结构转换为C结构
+	cData, err := mc.convertToCMetricsData(data)
+	if err != nil {
+		return fmt.Errorf("转换数据失败: %v", err)
+	}
+
+	// 发送到C ring buffer
+	if err := mc.metricsBuffer.PushData(unsafe.Pointer(cData)); err != nil {
+		// 释放内存
+		C.free(unsafe.Pointer(cData.metrics))
+		C.free(unsafe.Pointer(cData))
+		return fmt.Errorf("发送到C ring buffer失败: %v", err)
+	}
+
+	return nil
+}
+
+// processFromCRingBuffer 从C ring buffer处理数据
+func (mc *MetricsCollector) processFromCRingBuffer() {
+	if mc.metricsBuffer == nil {
+		return
+	}
+
+	// 批量处理数据
+	batchSize := 10
+	var batch []models.MetricsData
+
+	for i := 0; i < batchSize; i++ {
+		dataPtr, err := mc.metricsBuffer.TryPopData()
+		if err != nil {
+			if err == c.ErrBufferEmpty {
+				break
+			}
+			log.Printf("从C ring buffer获取数据失败: %v", err)
+			continue
+		}
+
+		// 转换C结构为Go结构
+		cData := (*C.MetricsData)(dataPtr)
+		goData, err := mc.convertFromCMetricsData(cData)
+		if err != nil {
+			log.Printf("转换C数据失败: %v", err)
+			// 释放内存
+			C.free(unsafe.Pointer(cData.metrics))
+			C.free(unsafe.Pointer(cData))
+			continue
+		}
+
+		batch = append(batch, goData)
+
+		// 释放C结构内存
+		C.free(unsafe.Pointer(cData.metrics))
+		C.free(unsafe.Pointer(cData))
+	}
+
+	// 处理批量数据
+	if len(batch) > 0 {
+		ctx := context.Background()
+		if err := mc.grpcClient.SendMetricsWithRetry(ctx, batch); err != nil {
+			log.Printf("发送批量数据失败: %v", err)
+		}
+	}
+}
+
+// convertToCMetricsData 将Go MetricsData转换为C MetricsData
+func (mc *MetricsCollector) convertToCMetricsData(data models.MetricsData) (*C.MetricsData, error) {
+	// 分配C结构内存
+	cData := (*C.MetricsData)(C.malloc(C.sizeof_MetricsData))
+	if cData == nil {
+		return nil, fmt.Errorf("分配C MetricsData内存失败")
+	}
+
+	// 设置基本信息
+	cHostID := C.CString(data.HostID)
+	C.strcpy((*C.char)(unsafe.Pointer(&cData.host_id[0])), cHostID)
+	C.free(unsafe.Pointer(cHostID))
+	cData.timestamp = C.int64_t(data.Timestamp.Unix())
+	cData.metrics_count = C.int(len(data.Metrics))
+
+	// 分配指标数组内存
+	if len(data.Metrics) > 0 {
+		cMetrics := (*C.Metric)(C.malloc(C.size_t(len(data.Metrics)) * C.sizeof_Metric))
+		if cMetrics == nil {
+			C.free(unsafe.Pointer(cData))
+			return nil, fmt.Errorf("分配C Metric数组内存失败")
+		}
+
+		// 转换每个指标
+		for i, metric := range data.Metrics {
+			cMetric := (*C.Metric)(unsafe.Pointer(uintptr(unsafe.Pointer(cMetrics)) + uintptr(i)*C.sizeof_Metric))
+
+			cName := C.CString(metric.Name)
+			C.strcpy((*C.char)(unsafe.Pointer(&cMetric.name[0])), cName)
+			C.free(unsafe.Pointer(cName))
+
+			cMetric.value = C.double(metric.Value)
+
+			cUnit := C.CString(metric.Unit)
+			C.strcpy((*C.char)(unsafe.Pointer(&cMetric.unit[0])), cUnit)
+			C.free(unsafe.Pointer(cUnit))
+		}
+
+		cData.metrics = cMetrics
+	} else {
+		cData.metrics = nil
+	}
+
+	return cData, nil
+}
+
+// convertFromCMetricsData 将C MetricsData转换为Go MetricsData
+func (mc *MetricsCollector) convertFromCMetricsData(cData *C.MetricsData) (models.MetricsData, error) {
+	// 转换基本信息
+	hostID := C.GoString((*C.char)(unsafe.Pointer(&cData.host_id[0])))
+	timestamp := time.Unix(int64(cData.timestamp), 0)
+
+	// 转换指标
+	var metrics []models.Metric
+	metricsCount := int(cData.metrics_count)
+
+	if metricsCount > 0 && cData.metrics != nil {
+		for i := 0; i < metricsCount; i++ {
+			cMetric := (*C.Metric)(unsafe.Pointer(uintptr(unsafe.Pointer(cData.metrics)) + uintptr(i)*C.sizeof_Metric))
+
+			metric := models.Metric{
+				Name:  C.GoString((*C.char)(unsafe.Pointer(&cMetric.name[0]))),
+				Value: float64(cMetric.value),
+				Unit:  C.GoString((*C.char)(unsafe.Pointer(&cMetric.unit[0]))),
+			}
+			metrics = append(metrics, metric)
+		}
+	}
+
+	return models.MetricsData{
+		HostID:    hostID,
+		Timestamp: timestamp,
+		Metrics:   metrics,
+	}, nil
 }

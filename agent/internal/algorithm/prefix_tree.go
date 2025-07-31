@@ -368,3 +368,126 @@ func (pt *PatriciaTrie) StartsWith(prefix string) bool {
 
 	return true
 }
+
+// GetStats 获取统计信息
+func (t *Trie) GetStats() map[string]interface{} {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	stats := make(map[string]interface{})
+	stats["node_count"] = t.countNodes(t.root)
+	stats["word_count"] = t.countWords(t.root)
+	stats["max_depth"] = t.maxDepth(t.root, 0)
+	stats["memory_usage"] = t.estimateMemoryUsage()
+	
+	return stats
+}
+
+// countNodes 统计节点数量
+func (t *Trie) countNodes(node *TrieNode) int {
+	if node == nil {
+		return 0
+	}
+	
+	count := 1
+	for _, child := range node.children {
+		count += t.countNodes(child)
+	}
+	return count
+}
+
+// countWords 统计单词数量
+func (t *Trie) countWords(node *TrieNode) int {
+	if node == nil {
+		return 0
+	}
+	
+	count := 0
+	if node.isEnd {
+		count = 1
+	}
+	
+	for _, child := range node.children {
+		count += t.countWords(child)
+	}
+	return count
+}
+
+// maxDepth 计算最大深度
+func (t *Trie) maxDepth(node *TrieNode, depth int) int {
+	if node == nil {
+		return depth
+	}
+	
+	maxChildDepth := depth
+	for _, child := range node.children {
+		childDepth := t.maxDepth(child, depth+1)
+		if childDepth > maxChildDepth {
+			maxChildDepth = childDepth
+		}
+	}
+	return maxChildDepth
+}
+
+// estimateMemoryUsage 估算内存使用量
+func (t *Trie) estimateMemoryUsage() int {
+	// 简化估算：每个节点约100字节
+	return t.countNodes(t.root) * 100
+}
+
+// Size 获取大小（节点数量）
+func (t *Trie) Size() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.countNodes(t.root)
+}
+
+// Export 导出前缀树数据
+func (t *Trie) Export() map[string]interface{} {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	
+	data := make(map[string]interface{})
+	data["words"] = t.exportWords(t.root, "")
+	data["stats"] = t.GetStats()
+	
+	return data
+}
+
+// exportWords 导出所有单词
+func (t *Trie) exportWords(node *TrieNode, prefix string) map[string]interface{} {
+	words := make(map[string]interface{})
+	
+	if node.isEnd {
+		words[prefix] = node.value
+	}
+	
+	for ch, child := range node.children {
+		childWords := t.exportWords(child, prefix+string(ch))
+		for k, v := range childWords {
+			words[k] = v
+		}
+	}
+	
+	return words
+}
+
+// Import 导入前缀树数据
+func (t *Trie) Import(data map[string]interface{}) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	
+	// 清空现有数据
+	t.root = &TrieNode{
+		children: make(map[rune]*TrieNode),
+	}
+	
+	// 导入单词
+	if words, ok := data["words"].(map[string]interface{}); ok {
+		for key, value := range words {
+			t.Insert(key, value)
+		}
+	}
+	
+	return nil
+}

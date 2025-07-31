@@ -27,7 +27,7 @@ if [ ! -f "static/index.html" ]; then
 fi
 
 # 创建必要的目录
-mkdir -p logs
+mkdir -p logs data/raft/logs data/raft/snapshots static
 
 # 构建可视化分析端
 echo -e "${YELLOW}构建可视化分析端...${NC}"
@@ -38,13 +38,39 @@ if [ $? -ne 0 ]; then
 fi
 echo -e "${GREEN}构建成功${NC}"
 
+# 构建Broker（Visualization需要连接到Broker）
+echo -e "${YELLOW}构建Broker...${NC}"
+go build -o bin/broker ./broker/cmd
+if [ $? -ne 0 ]; then
+    echo -e "${RED}构建Broker失败${NC}"
+    exit 1
+fi
+echo -e "${GREEN}构建Broker成功${NC}"
+
+# 启动Broker（后台）
+echo -e "${YELLOW}启动Broker...${NC}"
+./bin/broker --config configs/broker.yaml > logs/broker_for_viz_test.log 2>&1 &
+BROKER_PID=$!
+
+# 等待Broker启动
+sleep 5
+
+# 检查Broker进程是否存在
+if ps -p $BROKER_PID > /dev/null; then
+    echo -e "${GREEN}Broker已启动，PID: $BROKER_PID${NC}"
+else
+    echo -e "${RED}Broker启动失败${NC}"
+    cat logs/broker_for_viz_test.log
+    exit 1
+fi
+
 # 运行可视化分析端（后台）
 echo -e "${YELLOW}启动可视化分析端...${NC}"
 ./bin/visualization --config configs/visualization.yaml > logs/visualization_test.log 2>&1 &
 VIZ_PID=$!
 
 # 等待启动
-sleep 3
+sleep 5
 
 # 检查进程是否存在
 if ps -p $VIZ_PID > /dev/null; then
@@ -111,9 +137,15 @@ fi
 
 # 停止可视化分析端
 echo -e "${YELLOW}停止可视化分析端...${NC}"
-kill $VIZ_PID
+kill $VIZ_PID 2>/dev/null
 wait $VIZ_PID 2>/dev/null
 echo -e "${GREEN}可视化分析端已停止${NC}"
+
+# 停止Broker
+echo -e "${YELLOW}停止Broker...${NC}"
+kill $BROKER_PID 2>/dev/null
+wait $BROKER_PID 2>/dev/null
+echo -e "${GREEN}Broker已停止${NC}"
 
 echo -e "${GREEN}测试完成${NC}"
 exit 0 

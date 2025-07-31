@@ -2,6 +2,7 @@
 
 # 服务器配置
 server:
+  host: "localhost"
   port: 8080
   read_timeout: 10s
   write_timeout: 10s
@@ -10,7 +11,7 @@ server:
 # 中转层配置
 broker:
   endpoints:
-    - "localhost:9090"
+    - "localhost:9093"
   timeout: 5s
   max_retry: 3
 
@@ -40,16 +41,21 @@ quic:
 auth:
   jwt_secret: "your-secret-key-here"
   token_expiration: 15m
+  refresh_token_expiration: 24h
+  cookie_secure: false
+  cookie_http_only: true
+  cookie_name: "monitor_token"
+  refresh_cookie_name: "monitor_refresh_token"
 
 # Top-K配置
 topk:
   size: 10
-  ttl: 5m
+  ttl: 1h
 
 # 缓存配置
 cache:
   ttl: 5m
-  cleanup_interval: 10m
+  cleanup_interval: 5m
 
 # 日志配置
 log:

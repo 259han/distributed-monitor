@@ -1,7 +1,7 @@
 package config
 
 import (
-	"io/ioutil"
+	"os"
 	"sync"
 	"time"
 
@@ -22,6 +22,7 @@ type Config struct {
 
 // ServerConfig 服务器配置
 type ServerConfig struct {
+	Host         string        `yaml:"host"`
 	Port         int           `yaml:"port"`
 	ReadTimeout  time.Duration `yaml:"read_timeout"`
 	WriteTimeout time.Duration `yaml:"write_timeout"`
@@ -37,23 +38,25 @@ type BrokerConfig struct {
 
 // WebSocketConfig WebSocket配置
 type WebSocketConfig struct {
-	Enable          bool          `yaml:"enable"`
-	Path            string        `yaml:"path"`
-	ReadBufferSize  int           `yaml:"read_buffer_size"`
-	WriteBufferSize int           `yaml:"write_buffer_size"`
-	MaxMessageSize  int64         `yaml:"max_message_size"`
-	PingInterval    time.Duration `yaml:"ping_interval"`
-	PingTimeout     time.Duration `yaml:"ping_timeout"`
-	PongTimeout     time.Duration `yaml:"pong_timeout"`
-	WriteTimeout    time.Duration `yaml:"write_timeout"`
-	BufferSize      int           `yaml:"buffer_size"`
+	Enable             bool          `yaml:"enable"`
+	Path               string        `yaml:"path"`
+	ReadBufferSize     int           `yaml:"read_buffer_size"`
+	WriteBufferSize    int           `yaml:"write_buffer_size"`
+	MaxMessageSize     int64         `yaml:"max_message_size"`
+	PingInterval       time.Duration `yaml:"ping_interval"`
+	PingTimeout        time.Duration `yaml:"ping_timeout"`
+	PongTimeout        time.Duration `yaml:"pong_timeout"`
+	WriteTimeout       time.Duration `yaml:"write_timeout"`
+	BufferSize         int           `yaml:"buffer_size"`
+	HeartbeatInterval  time.Duration `yaml:"heartbeat_interval"`
+	HeartbeatTimeout   time.Duration `yaml:"heartbeat_timeout"`
 }
 
 // QUICConfig QUIC配置
 type QUICConfig struct {
 	Enable            bool          `yaml:"enable"`
 	Port              int           `yaml:"port"`
-	MaxStreamsPerConn int           `yaml:"max_streams_per_connection"`
+	MaxStreamsPerConn int           `yaml:"max_streams_per_conn"`
 	KeepAlivePeriod   time.Duration `yaml:"keep_alive_period"`
 	MaxIdleTimeout    time.Duration `yaml:"max_idle_timeout"`
 	BufferSize        int           `yaml:"buffer_size"`
@@ -61,29 +64,32 @@ type QUICConfig struct {
 
 // AuthConfig 认证配置
 type AuthConfig struct {
-	JWTSecret          string        `yaml:"jwt_secret"`
-	TokenExpiry        time.Duration `yaml:"token_expiry"`
-	RefreshTokenExpiry time.Duration `yaml:"refresh_token_expiry"`
-	CookieSecure       bool          `yaml:"cookie_secure"`
-	CookieHTTPOnly     bool          `yaml:"cookie_http_only"`
+	JWTSecret            string        `yaml:"jwt_secret"`
+	TokenExpiry          time.Duration `yaml:"token_expiration"`
+	RefreshTokenExpiry   time.Duration `yaml:"refresh_token_expiration"`
+	CookieSecure         bool          `yaml:"cookie_secure"`
+	CookieHTTPOnly       bool          `yaml:"cookie_http_only"`
+	CookieName           string        `yaml:"cookie_name"`
+	RefreshCookieName    string        `yaml:"refresh_cookie_name"`
 }
 
 // TopKConfig Top-K配置
 type TopKConfig struct {
-	Size           int           `yaml:"size"`
-	UpdateInterval time.Duration `yaml:"update_interval"`
-	Metrics        []string      `yaml:"metrics"`
+	Size int           `yaml:"size"`
+	TTL  time.Duration `yaml:"ttl"`
 }
 
 // CacheConfig 缓存配置
 type CacheConfig struct {
-	DefaultExpiration time.Duration `yaml:"default_expiration"`
-	CleanupInterval   time.Duration `yaml:"cleanup_interval"`
+	TTL             time.Duration `yaml:"ttl"`
+	CleanupInterval time.Duration `yaml:"cleanup_interval"`
 }
 
 // LogConfig 日志配置
 type LogConfig struct {
 	Level      string `yaml:"level"`
+	Format     string `yaml:"format"`
+	Output     string `yaml:"output"`
 	Path       string `yaml:"path"`
 	MaxSize    int    `yaml:"max_size"`
 	MaxBackups int    `yaml:"max_backups"`
@@ -101,7 +107,7 @@ func LoadConfig(path string) (*Config, error) {
 	var err error
 	once.Do(func() {
 		config = &Config{}
-		data, readErr := ioutil.ReadFile(path)
+		data, readErr := os.ReadFile(path)
 		if readErr != nil {
 			err = readErr
 			return
@@ -164,19 +170,13 @@ func LoadConfig(path string) (*Config, error) {
 		if config.Auth.TokenExpiry == 0 {
 			config.Auth.TokenExpiry = 1 * time.Hour
 		}
-		if config.Auth.RefreshTokenExpiry == 0 {
-			config.Auth.RefreshTokenExpiry = 24 * time.Hour
-		}
 
 		if config.TopK.Size == 0 {
 			config.TopK.Size = 10
 		}
-		if config.TopK.UpdateInterval == 0 {
-			config.TopK.UpdateInterval = 5 * time.Second
-		}
 
-		if config.Cache.DefaultExpiration == 0 {
-			config.Cache.DefaultExpiration = 5 * time.Minute
+		if config.Cache.TTL == 0 {
+			config.Cache.TTL = 5 * time.Minute
 		}
 		if config.Cache.CleanupInterval == 0 {
 			config.Cache.CleanupInterval = 10 * time.Minute

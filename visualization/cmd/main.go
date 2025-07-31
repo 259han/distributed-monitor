@@ -11,6 +11,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/han-fei/monitor/visualization/internal/analysis"
+	"github.com/han-fei/monitor/visualization/internal/api"
+	"github.com/han-fei/monitor/visualization/internal/auth"
 	"github.com/han-fei/monitor/visualization/internal/config"
 	"github.com/han-fei/monitor/visualization/internal/quic"
 	"github.com/han-fei/monitor/visualization/internal/radix"
@@ -29,6 +32,23 @@ func main() {
 		log.Fatalf("加载配置失败: %v", err)
 	}
 
+	// 创建JWT认证
+	jwtConfig := auth.JWTConfig{
+		Secret:            cfg.Auth.JWTSecret,
+		TokenExpiry:       cfg.Auth.TokenExpiry,
+		RefreshExpiry:     cfg.Auth.RefreshTokenExpiry,
+		CookieSecure:      cfg.Auth.CookieSecure,
+		CookieHTTPOnly:    cfg.Auth.CookieHTTPOnly,
+		CookieName:        cfg.Auth.CookieName,
+		RefreshCookieName: cfg.Auth.RefreshCookieName,
+	}
+	jwtAuth := auth.NewJWTAuth(jwtConfig)
+	
+	// 创建认证处理器
+	authHandler := auth.NewAuthHandler(jwtAuth)
+	
+	log.Printf("JWT认证初始化完成")
+
 	// 创建基数树
 	ruleTree := radix.NewRadixTree()
 	log.Printf("基数树初始化完成")
@@ -37,6 +57,10 @@ func main() {
 	_ = ruleTree.Insert("host-1", "高优先级")
 	_ = ruleTree.Insert("host-2", "中优先级")
 	_ = ruleTree.Insert("host-3", "低优先级")
+
+	// 创建数据分析器
+	analyzer := analysis.NewAnalyzer()
+	log.Printf("数据分析器初始化完成")
 
 	// 创建WebSocket服务器
 	wsServer := websocket.NewServer(cfg)
@@ -52,7 +76,10 @@ func main() {
 	}
 	defer grpcClient.Close()
 
-	// 创建QUIC服务器（如果启用）
+	// 创建API处理器
+	apiHandler := api.NewAPIHandler(analyzer, grpcClient)
+	log.Printf("API处理器初始化完成")
+
 	var quicServer *quic.Server
 	if cfg.QUIC.Enable {
 		quicServer, err = quic.NewServer(cfg)
@@ -71,14 +98,26 @@ func main() {
 	// 创建HTTP服务器
 	mux := http.NewServeMux()
 
-	// 注册WebSocket处理程序
-	mux.HandleFunc("/ws", wsServer.HandleWebSocket)
+	// 注册认证路由
+	authHandler.RegisterRoutes(mux)
+
+	// 注册WebSocket处理程序（需要认证）
+	mux.Handle("/ws", jwtAuth.RequireAuth(http.HandlerFunc(wsServer.HandleWebSocket)))
 
 	// 注册API路由
+	apiHandler.RegisterRoutes(mux)
+	
+	// 注册状态检查路由
 	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"running","version":"0.1.0"}`))
+		w.Write([]byte(`{"status":"running","version":"1.0.0"}`))
 	})
+
+	// 注册管理员路由
+	mux.Handle("/api/admin", jwtAuth.RequireAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"message":"Admin endpoint"}`))
+	})))
 
 	// 注册静态文件服务
 	mux.Handle("/", http.FileServer(http.Dir("./static")))
@@ -150,11 +189,10 @@ func pullDataFromBroker(ctx context.Context, client *service.GRPCClient, wsServe
 					continue
 				}
 
-				// 发送数据到WebSocket
+				// 发送数据到WebSocket和QUIC
 				for _, data := range metrics {
 					wsServer.Broadcast(data)
 
-					// 如果QUIC服务器已启用，也发送到QUIC
 					if quicServer != nil {
 						quicServer.SendData(data)
 					}

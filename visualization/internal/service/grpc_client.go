@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"sync"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/han-fei/monitor/proto"
+	pb "github.com/han-fei/monitor/proto"
 	"github.com/han-fei/monitor/visualization/internal/config"
 	"github.com/han-fei/monitor/visualization/internal/models"
 )
@@ -19,7 +20,7 @@ import (
 type GRPCClient struct {
 	config     *config.Config
 	conns      map[string]*grpc.ClientConn
-	clients    map[string]proto.MonitorServiceClient
+	clients    map[string]pb.MonitorServiceClient
 	mu         sync.RWMutex
 	retryCount int
 }
@@ -29,7 +30,7 @@ func NewGRPCClient(cfg *config.Config) *GRPCClient {
 	return &GRPCClient{
 		config:     cfg,
 		conns:      make(map[string]*grpc.ClientConn),
-		clients:    make(map[string]proto.MonitorServiceClient),
+		clients:    make(map[string]pb.MonitorServiceClient),
 		retryCount: cfg.Broker.MaxRetry,
 	}
 }
@@ -62,7 +63,7 @@ func (c *GRPCClient) Connect() error {
 		}
 
 		// 创建客户端
-		client := proto.NewMonitorServiceClient(conn)
+		client := pb.NewMonitorServiceClient(conn)
 
 		// 保存连接和客户端
 		c.conns[endpoint] = conn
@@ -107,7 +108,7 @@ func (c *GRPCClient) GetMetrics(ctx context.Context, hostID string, startTime, e
 	client := c.clients[selectedEndpoint]
 
 	// 创建请求
-	req := &proto.MetricsRequest{
+	req := &pb.MetricsRequest{
 		HostId:    hostID,
 		StartTime: startTime.Unix(),
 		EndTime:   endTime.Unix(),
@@ -133,9 +134,13 @@ func (c *GRPCClient) GetMetrics(ctx context.Context, hostID string, startTime, e
 		// 转换为模型
 		metrics := make([]models.Metric, 0, len(data.Metrics))
 		for _, m := range data.Metrics {
+			value, err := strconv.ParseFloat(m.Value, 64)
+			if err != nil {
+				continue // Skip invalid values
+			}
 			metrics = append(metrics, models.Metric{
 				Name:  m.Name,
-				Value: m.Value,
+				Value: value,
 				Unit:  m.Unit,
 			})
 		}

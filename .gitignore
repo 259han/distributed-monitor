@@ -100,4 +100,7 @@ cache/
 
 # 运行时文件
 *.pid
-*.sock 
+*.sock
+
+# 其他
+read.md

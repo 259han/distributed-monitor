@@ -2,8 +2,10 @@ package raft
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/hashicorp/raft"
 )
@@ -16,6 +18,12 @@ const (
 	CommandSet CommandType = iota
 	// CommandDelete 删除命令
 	CommandDelete
+	// CommandUpdate 更新命令
+	CommandUpdate
+	// CommandIncrement 增量命令
+	CommandIncrement
+	// CommandExpire 过期命令
+	CommandExpire
 )
 
 // Command 命令
@@ -23,6 +31,8 @@ type Command struct {
 	Type  CommandType `json:"type"`
 	Key   string      `json:"key"`
 	Value []byte      `json:"value,omitempty"`
+	TTL   time.Duration `json:"ttl,omitempty"`
+	Meta  map[string]interface{} `json:"meta,omitempty"`
 }
 
 // FSM 有限状态机
@@ -52,7 +62,7 @@ func (f *FSM) Apply(log *raft.Log) interface{} {
 	// 解析命令
 	var cmd Command
 	if err := json.Unmarshal(log.Data, &cmd); err != nil {
-		return err
+		return fmt.Errorf("failed to unmarshal command: %v", err)
 	}
 
 	// 执行命令
@@ -63,9 +73,98 @@ func (f *FSM) Apply(log *raft.Log) interface{} {
 	case CommandDelete:
 		delete(f.data, cmd.Key)
 		return nil
-	default:
+	case CommandUpdate:
+		// 更新操作，只有键存在时才更新
+		if _, exists := f.data[cmd.Key]; exists {
+			f.data[cmd.Key] = cmd.Value
+		}
 		return nil
+	case CommandIncrement:
+		// 增量操作，用于计数器
+		if val, exists := f.data[cmd.Key]; exists {
+			// 尝试解析为数字并增加
+			var current int
+			if err := json.Unmarshal(val, &current); err == nil {
+				var increment int
+				if err := json.Unmarshal(cmd.Value, &increment); err == nil {
+					current += increment
+					updated, _ := json.Marshal(current)
+					f.data[cmd.Key] = updated
+				}
+			}
+		}
+		return nil
+	case CommandExpire:
+		// 过期操作，删除键
+		delete(f.data, cmd.Key)
+		return nil
+	default:
+		// 尝试解析为通用命令格式
+		return f.applyGenericCommand(cmd, log.Data)
 	}
+}
+
+// applyGenericCommand 应用通用命令
+func (f *FSM) applyGenericCommand(cmd Command, rawData []byte) interface{} {
+	// 解析为map格式
+	var genericCmd map[string]interface{}
+	if err := json.Unmarshal(rawData, &genericCmd); err != nil {
+		return fmt.Errorf("failed to unmarshal generic command: %v", err)
+	}
+
+	// 根据命令类型处理
+	switch cmdType := genericCmd["type"].(string); cmdType {
+	case "batch_metrics":
+		return f.applyBatchMetrics(genericCmd)
+	case "host_registration":
+		return f.applyHostRegistration(genericCmd)
+	case "config_update":
+		return f.applyConfigUpdate(genericCmd)
+	default:
+		return fmt.Errorf("unknown generic command type: %s", cmdType)
+	}
+}
+
+// applyBatchMetrics 应用批量指标数据
+func (f *FSM) applyBatchMetrics(cmd map[string]interface{}) interface{} {
+	batch, ok := cmd["batch"].([]interface{})
+	if !ok {
+		return fmt.Errorf("invalid batch format")
+	}
+
+	// 处理批量数据
+	for _, item := range batch {
+		if metricsData, ok := item.(map[string]interface{}); ok {
+			// 生成键
+			hostID, _ := metricsData["host_id"].(string)
+			timestamp, _ := metricsData["timestamp"].(float64)
+			key := fmt.Sprintf("metrics:%s:%d", hostID, int64(timestamp))
+			
+			// 存储数据
+			data, _ := json.Marshal(metricsData)
+			f.data[key] = data
+		}
+	}
+
+	return nil
+}
+
+// applyHostRegistration 应用主机注册
+func (f *FSM) applyHostRegistration(cmd map[string]interface{}) interface{} {
+	hostID, _ := cmd["host_id"].(string)
+	hostData, _ := json.Marshal(cmd)
+	
+	key := fmt.Sprintf("host:%s", hostID)
+	f.data[key] = hostData
+	
+	return nil
+}
+
+// applyConfigUpdate 应用配置更新
+func (f *FSM) applyConfigUpdate(cmd map[string]interface{}) interface{} {
+	configData, _ := json.Marshal(cmd)
+	f.data["config:current"] = configData
+	return nil
 }
 
 // Snapshot 创建快照
