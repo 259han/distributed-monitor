@@ -41,14 +41,14 @@ func mainHostManager() {
 				CleanupInterval:     cfg.HostManagement.Registry.CleanupInterval,
 			},
 			DiscoveryConfig: &host.DiscoveryConfig{
-				ListenPort:      cfg.HostManagement.Discovery.ListenPort,
-				ScanInterval:    cfg.HostManagement.Discovery.ScanInterval,
-				ScanTimeout:     cfg.HostManagement.Discovery.ScanTimeout,
-				EnableMulticast: cfg.HostManagement.Discovery.EnableMulticast,
-				EnableHTTP:      cfg.HostManagement.Discovery.EnableHTTP,
-				EnableFileWatch: cfg.HostManagement.Discovery.EnableFileWatch,
-				NetworkRanges:   cfg.HostManagement.Discovery.NetworkRanges,
-				DiscoveryTypes:  cfg.HostManagement.Discovery.DiscoveryTypes,
+				ListenPort:       cfg.HostManagement.Discovery.ListenPort,
+				ScanInterval:     cfg.HostManagement.Discovery.ScanInterval,
+				ScanTimeout:      cfg.HostManagement.Discovery.ScanTimeout,
+				EnableMulticast:  cfg.HostManagement.Discovery.EnableMulticast,
+				EnableHTTP:       cfg.HostManagement.Discovery.EnableHTTP,
+				EnableFileWatch:  cfg.HostManagement.Discovery.EnableFileWatch,
+				NetworkRanges:    cfg.HostManagement.Discovery.NetworkRanges,
+				DiscoveryTypes:   cfg.HostManagement.Discovery.DiscoveryTypes,
 				ServicePortRange: cfg.HostManagement.Discovery.ServicePortRange,
 			},
 			HealthConfig: &host.HealthConfig{
@@ -62,7 +62,7 @@ func mainHostManager() {
 				HTTPPaths:       cfg.HostManagement.Health.HTTPPaths,
 				AlertThresholds: cfg.HostManagement.Health.AlertThresholds,
 			},
-			AutoRemove:    cfg.HostManagement.AutoRemove,
+			AutoRemove:    cfg.HostManagement.AutoRemoveCfg.Enabled,
 			RemoveTimeout: cfg.HostManagement.AutoRemoveCfg.UnhealthyTimeout,
 			MaxHosts:      cfg.HostManagement.MaxHosts,
 			EnableScaling: cfg.HostManagement.EnableScaling,
@@ -75,9 +75,9 @@ func mainHostManager() {
 		defer hostManager.Stop()
 
 		log.Println("动态主机管理系统已启动")
-		log.Printf("配置: 启用=%v, 自动移除=%v, 扩缩容=%v, 最大主机数=%d", 
+		log.Printf("配置: 启用=%v, 自动移除=%v, 扩缩容=%v, 最大主机数=%d",
 			cfg.HostManagement.Enabled,
-			cfg.HostManagement.AutoRemove,
+			cfg.HostManagement.AutoRemoveCfg.Enabled,
 			cfg.HostManagement.EnableScaling,
 			cfg.HostManagement.MaxHosts)
 

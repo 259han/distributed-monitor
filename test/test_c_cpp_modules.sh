@@ -31,12 +31,7 @@ check_tools() {
         exit 1
     fi
     
-    if ! pkg-config --exists libevent; then
-        echo -e "${RED}错误: 未找到libevent开发库${NC}"
-        echo -e "${YELLOW}请安装: sudo apt-get install libevent-dev${NC}"
-        exit 1
-    fi
-    
+        
     echo -e "${GREEN}✓ 编译工具检查通过${NC}"
 }
 
@@ -65,10 +60,7 @@ compile_c_modules() {
     fi
     echo -e "${GREEN}✓ ring buffer编译成功${NC}"
     
-    # 编译libevent服务器（跳过，文件不存在）
-    echo -e "${YELLOW}跳过libevent服务器编译（文件不存在）...${NC}"
-    echo -e "${YELLOW}如需libevent功能，请先创建相关源文件${NC}"
-    
+        
     return 0
 }
 
@@ -226,12 +218,6 @@ test_epoll_server() {
     return 0
 }
 
-# 测试libevent服务器（跳过）
-test_libevent_server() {
-    echo -e "${YELLOW}跳过libevent服务器测试（文件不存在）...${NC}"
-    echo -e "${YELLOW}如需测试libevent功能，请先创建相关源文件${NC}"
-    return 0
-}
 
 # 测试Top-K模块
 test_topk_module() {
@@ -414,9 +400,9 @@ generate_report() {
 - **特点**: 共享内存，高性能堆实现
 - **状态**: ✅ 已实现并通过测试
 
-### 4. libevent集成
-- **功能**: 简化epoll实现
-- **特点**: 事件驱动，高并发
+### 4. 网络层实现
+- **功能**: 基于epoll的高性能网络服务器
+- **特点**: 事件驱动，高并发，低延迟
 - **状态**: ✅ 已实现并通过测试
 
 ## 性能指标
@@ -456,8 +442,7 @@ main() {
     # 运行测试
     test_ring_buffer
     test_epoll_server
-    test_libevent_server
-    test_topk_module
+        test_topk_module
     
     # 性能测试
     performance_test

@@ -85,7 +85,6 @@ type AdvancedConfig struct {
 // HostManagementConfig 主机管理配置
 type HostManagementConfig struct {
 	Enabled       bool                   `yaml:"enabled"`
-	AutoRemove    bool                   `yaml:"auto_remove"`
 	EnableScaling bool                   `yaml:"enable_scaling"`
 	MaxHosts      int                    `yaml:"max_hosts"`
 	Registry      RegistryConfig         `yaml:"registry"`
@@ -243,8 +242,8 @@ func setHostManagementDefaults(config *Config) {
 	if !config.HostManagement.Enabled {
 		config.HostManagement.Enabled = false
 	}
-	if !config.HostManagement.AutoRemove {
-		config.HostManagement.AutoRemove = false
+	if !config.HostManagement.AutoRemoveCfg.Enabled {
+		config.HostManagement.AutoRemoveCfg.Enabled = false
 	}
 	if !config.HostManagement.EnableScaling {
 		config.HostManagement.EnableScaling = false

@@ -58,9 +58,7 @@ build-c:
 	@gcc -Wall -Wextra -O2 -pthread -DCOMPILE_TEST -o bin/c/ring_buffer_test ./agent/internal/c/ring_buffer.c ./agent/internal/c/ring_buffer_test.c
 	@echo "编译C ring buffer共享库..."
 	@gcc -shared -fPIC -Wall -Wextra -O2 -pthread -o bin/lib/libringbuffer.so ./agent/internal/c/ring_buffer.c
-	@echo "编译libevent服务器(跳过，需要libevent-dev)..."
-	@echo "# 跳过libevent编译，需要安装libevent-dev"
-
+	
 build-cpp:
 	@echo "构建C++模块..."
 	@mkdir -p bin/cpp bin/lib

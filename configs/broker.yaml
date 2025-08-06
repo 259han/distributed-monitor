@@ -51,7 +51,6 @@ advanced:
 # 动态主机管理配置
 host_management:
   enabled: true
-  auto_remove: true
   enable_scaling: true
   max_hosts: 100
   

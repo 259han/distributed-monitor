@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"sort"
 	"sync"
 	"time"
 
@@ -237,7 +236,7 @@ func (a *Analyzer) AnalyzeTrend(hostID, metricName string, timeRange TimeRange) 
 	// 提取时间序列数据
 	var xValues []float64
 	var yValues []float64
-	baseTime := filteredData[0].Timestamp.Unix()
+	_ = filteredData[0].Timestamp.Unix() // baseTime for potential future use
 
 	for i, d := range filteredData {
 		xValues = append(xValues, float64(i))
@@ -558,7 +557,7 @@ func (a *Analyzer) GetStatistics(hostID string) map[string]interface{} {
 		}
 		
 		// 计算平均值
-		for metricName, stat := range metricStats {
+		for _, stat := range metricStats {
 			statMap := stat.(map[string]interface{})
 			if count := statMap["count"].(int); count > 0 {
 				statMap["avg"] = statMap["sum"].(float64) / float64(count)

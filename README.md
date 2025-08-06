@@ -92,7 +92,19 @@ make build
 make build-agent    # 编译数据采集代理
 make build-broker   # 编译分布式消息中转层
 make build-viz      # 编译可视化分析端
+make build-c        # 编译C语言模块
+make build-cpp      # 编译C++模块
 ```
+
+### C/C++高性能模块
+
+系统集成了多个C/C++高性能模块：
+
+- **Ring Buffer**: 高性能循环缓冲区，用于数据采集代理的数据传输
+- **Epoll服务器**: 基于Linux epoll的高性能网络服务器，支持高并发连接
+- **Top-K算法**: 高性能Top-K查询算法，用于可视化分析端的数据分析
+
+这些模块通过CGO与Go代码集成，提供卓越的性能表现。
 
 ### 运行组件
 

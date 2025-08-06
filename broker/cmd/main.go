@@ -116,7 +116,7 @@ func main() {
 			HTTPPaths:       cfg.HostManagement.Health.HTTPPaths,
 			AlertThresholds: cfg.HostManagement.Health.AlertThresholds,
 		},
-		AutoRemove:    cfg.HostManagement.AutoRemove,
+		AutoRemove:    cfg.HostManagement.AutoRemoveCfg.Enabled,
 		RemoveTimeout: cfg.HostManagement.AutoRemoveCfg.UnhealthyTimeout,
 		MaxHosts:      cfg.HostManagement.MaxHosts,
 		MinHosts:      cfg.HostManagement.Scaling.MinHosts,
