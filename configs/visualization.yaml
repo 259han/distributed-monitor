@@ -30,7 +30,7 @@ websocket:
 
 # QUIC配置
 quic:
-  enable: false
+  enable: true   # 启用QUIC支持
   port: 8081
   max_streams_per_conn: 100
   keep_alive_period: 30s

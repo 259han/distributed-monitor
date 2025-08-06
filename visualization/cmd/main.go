@@ -15,11 +15,26 @@ import (
 	"github.com/han-fei/monitor/visualization/internal/api"
 	"github.com/han-fei/monitor/visualization/internal/auth"
 	"github.com/han-fei/monitor/visualization/internal/config"
+	"github.com/han-fei/monitor/visualization/internal/models"
 	"github.com/han-fei/monitor/visualization/internal/quic"
 	"github.com/han-fei/monitor/visualization/internal/radix"
 	"github.com/han-fei/monitor/visualization/internal/service"
 	"github.com/han-fei/monitor/visualization/internal/websocket"
 )
+
+// OldServerAdapter 兼容原有QUIC服务器的适配器
+type OldServerAdapter struct {
+	server *quic.Server
+}
+
+func (a *OldServerAdapter) Start() error                           { return a.server.Start() }
+func (a *OldServerAdapter) Stop() error                            { a.server.Stop(); return nil }
+func (a *OldServerAdapter) SendData(data *models.MetricsData)      { a.server.SendData(data) }
+func (a *OldServerAdapter) BroadcastData(data *models.MetricsData) { a.server.BroadcastData(data) }
+func (a *OldServerAdapter) GetMetricsData() <-chan *models.MetricsData {
+	return a.server.GetMetricsData()
+}
+func (a *OldServerAdapter) GetConnectionCount() int { return a.server.GetConnectionCount() }
 
 func main() {
 	// 解析命令行参数
@@ -43,10 +58,10 @@ func main() {
 		RefreshCookieName: cfg.Auth.RefreshCookieName,
 	}
 	jwtAuth := auth.NewJWTAuth(jwtConfig)
-	
+
 	// 创建认证处理器
 	authHandler := auth.NewAuthHandler(jwtAuth)
-	
+
 	log.Printf("JWT认证初始化完成")
 
 	// 创建基数树
@@ -80,18 +95,40 @@ func main() {
 	apiHandler := api.NewAPIHandler(analyzer, grpcClient)
 	log.Printf("API处理器初始化完成")
 
-	var quicServer *quic.Server
-	if cfg.QUIC.Enable {
-		quicServer, err = quic.NewServer(cfg)
-		if err != nil {
-			log.Printf("创建QUIC服务器失败: %v", err)
-		} else {
-			if err := quicServer.Start(); err != nil {
-				log.Printf("启动QUIC服务器失败: %v", err)
+	// 创建集成的QUIC服务器（支持新旧实现切换）
+	var quicServer interface {
+		Start() error
+		Stop() error
+		SendData(*models.MetricsData)
+		BroadcastData(*models.MetricsData)
+		GetMetricsData() <-chan *models.MetricsData
+		GetConnectionCount() int
+	}
+
+	// 优先使用新的QUIC实现
+	integratedServer, err := quic.NewIntegratedServer(cfg)
+	if err != nil {
+		log.Printf("创建集成QUIC服务器失败: %v", err)
+		// 回退到原有实现
+		if cfg.QUIC.Enable {
+			oldServer, err := quic.NewServer(cfg)
+			if err != nil {
+				log.Printf("创建原有QUIC服务器失败: %v", err)
 			} else {
-				log.Printf("QUIC服务器已启动")
-				defer quicServer.Stop()
+				quicServer = &OldServerAdapter{server: oldServer}
 			}
+		}
+	} else {
+		quicServer = integratedServer
+	}
+
+	// 启动QUIC服务器
+	if quicServer != nil {
+		if err := quicServer.Start(); err != nil {
+			log.Printf("启动QUIC服务器失败: %v", err)
+		} else {
+			log.Printf("QUIC服务器已启动")
+			defer quicServer.Stop()
 		}
 	}
 
@@ -106,7 +143,7 @@ func main() {
 
 	// 注册API路由
 	apiHandler.RegisterRoutes(mux)
-	
+
 	// 注册状态检查路由
 	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -165,7 +202,9 @@ func main() {
 }
 
 // pullDataFromBroker 从broker拉取数据
-func pullDataFromBroker(ctx context.Context, client *service.GRPCClient, wsServer *websocket.Server, quicServer *quic.Server) {
+func pullDataFromBroker(ctx context.Context, client *service.GRPCClient, wsServer *websocket.Server, quicServer interface {
+	SendData(*models.MetricsData)
+}) {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 

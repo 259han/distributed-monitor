@@ -23,6 +23,17 @@ broker:
     - "localhost:9093"
   timeout: 5s
 
+# QUIC配置
+quic:
+  enable: false  # QUIC开关，默认禁用
+  server_addr: "localhost:8081"
+  timeout: 5s
+  max_retries: 3
+  retry_interval: 1s
+  keep_alive_period: 30s
+  max_idle_timeout: 60s
+  heartbeat_interval: 10s
+
 # 日志配置
 log:
   level: "info"

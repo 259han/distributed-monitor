@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/han-fei/monitor/broker/internal/storage"
+	"github.com/han-fei/monitor/pkg/storage"
 )
 
 // Message 消息结构
@@ -62,9 +62,9 @@ type RedisMessageQueue struct {
 // NewRedisMessageQueue 创建Redis消息队列
 func NewRedisMessageQueue(storage *storage.RedisStorage, prefix string, ttl time.Duration) *RedisMessageQueue {
 	return &RedisMessageQueue{
-		storage:     storage,
-		prefix:      prefix,
-		ttl:         ttl,
+		storage: storage,
+		prefix:  prefix,
+		ttl:     ttl,
 		stats: &QueueStats{
 			TopicStats: make(map[string]*TopicStats),
 		},

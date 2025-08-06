@@ -38,6 +38,16 @@ grpc:
 raft_grpc:
   port: 9094
 
+# QUIC配置
+quic:
+  enable: false  # QUIC开关，默认禁用
+  port: 8082
+  max_streams_per_conn: 100
+  keep_alive_period: 30s
+  max_idle_timeout: 60s
+  buffer_size: 256
+  visualization_addr: "localhost:8081"  # 可视化组件地址
+
 # 日志配置
 log:
   level: "info"

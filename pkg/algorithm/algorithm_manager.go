@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/han-fei/monitor/agent/internal/config"
+	config "github.com/han-fei/monitor/pkg/agent"
 	"github.com/willf/bloom"
 )
 
@@ -32,13 +32,13 @@ type AlgorithmStats struct {
 	TimeWheelStats     map[string]interface{} `json:"time_wheel_stats"`
 	PrefixTreeStats    map[string]interface{} `json:"prefix_tree_stats"`
 	TotalOperations    int64                  `json:"total_operations"`
-	Uptime            time.Duration          `json:"uptime"`
+	Uptime             time.Duration          `json:"uptime"`
 }
 
 // NewAlgorithmManager 创建算法管理器
 func NewAlgorithmManager(cfg *config.Config) *AlgorithmManager {
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	manager := &AlgorithmManager{
 		config:         cfg,
 		slidingWindows: make(map[string]*SlidingWindow),
@@ -88,7 +88,7 @@ func (am *AlgorithmManager) initializeSlidingWindows() {
 		am.config.Algorithms.SlidingWindow.MaxAge,
 		am.config.Algorithms.SlidingWindow.Adaptive,
 	)
-	
+
 	if am.config.Algorithms.SlidingWindow.Adaptive {
 		defaultWindow.SetAdaptive(
 			true,
@@ -122,8 +122,8 @@ func (am *AlgorithmManager) initializeBloomFilter() {
 		am.config.Algorithms.BloomFilter.FalsePositive,
 	)
 
-	log.Printf("初始化布隆过滤器完成，大小: %d, 误判率: %.4f", 
-		am.config.Algorithms.BloomFilter.Size, 
+	log.Printf("初始化布隆过滤器完成，大小: %d, 误判率: %.4f",
+		am.config.Algorithms.BloomFilter.Size,
 		am.config.Algorithms.BloomFilter.FalsePositive)
 }
 
@@ -134,7 +134,7 @@ func (am *AlgorithmManager) initializeTimeWheel() {
 		am.config.Algorithms.TimeWheel.SlotNum,
 	)
 
-	log.Printf("初始化时间轮完成，间隔: %v, 槽位数: %d", 
+	log.Printf("初始化时间轮完成，间隔: %v, 槽位数: %d",
 		am.config.Algorithms.TimeWheel.TickInterval,
 		am.config.Algorithms.TimeWheel.SlotNum)
 }
@@ -142,13 +142,13 @@ func (am *AlgorithmManager) initializeTimeWheel() {
 // initializePrefixTree 初始化前缀树
 func (am *AlgorithmManager) initializePrefixTree() {
 	am.prefixTree = NewTrie()
-	
+
 	// 添加一些默认规则
 	defaultRules := map[string]string{
-		"host-*":    "default_host",
-		"server-*":  "server",
+		"host-*":     "default_host",
+		"server-*":   "server",
 		"database-*": "database",
-		"cache-*":   "cache",
+		"cache-*":    "cache",
 	}
 
 	for prefix, category := range defaultRules {
@@ -330,18 +330,18 @@ func (am *AlgorithmManager) GetStats() *AlgorithmStats {
 		stats.BloomFilterStats = map[string]interface{}{
 			"size":           am.bloomFilter.Cap(),
 			"hash_functions": am.bloomFilter.K(),
-			"bits":          am.bloomFilter.Cap() * 8,
+			"bits":           am.bloomFilter.Cap() * 8,
 		}
 	}
 
 	// 时间轮统计
 	if am.timeWheel != nil {
 		stats.TimeWheelStats = map[string]interface{}{
-			"interval":      am.timeWheel.interval.String(),
-			"slot_num":      am.timeWheel.slotNum,
-			"current_pos":   am.timeWheel.currentPos,
-			"task_count":    am.timeWheel.GetTaskCount(),
-			"multi_level":   am.timeWheel.nextTimeWheel != nil,
+			"interval":    am.timeWheel.interval.String(),
+			"slot_num":    am.timeWheel.slotNum,
+			"current_pos": am.timeWheel.currentPos,
+			"task_count":  am.timeWheel.GetTaskCount(),
+			"multi_level": am.timeWheel.nextTimeWheel != nil,
 		}
 	}
 
@@ -362,7 +362,7 @@ func (am *AlgorithmManager) GetStats() *AlgorithmStats {
 // getTotalOperations 获取总操作数
 func (am *AlgorithmManager) getTotalOperations() int64 {
 	var total int64 = 0
-	
+
 	for _, window := range am.slidingWindows {
 		if info := window.GetWindowInfo(); info != nil {
 			if ops, ok := info["total_operations"].(int64); ok {
@@ -370,7 +370,7 @@ func (am *AlgorithmManager) getTotalOperations() int64 {
 			}
 		}
 	}
-	
+
 	return total
 }
 
@@ -437,16 +437,16 @@ func (am *AlgorithmManager) collectMetrics() {
 	// 收集各种算法的指标
 	am.metrics["timestamp"] = time.Now()
 	am.metrics["sliding_window_count"] = len(am.slidingWindows)
-	
+
 	if am.bloomFilter != nil {
 		am.metrics["bloom_filter_size"] = am.bloomFilter.Cap()
 		am.metrics["bloom_filter_bits"] = am.bloomFilter.Cap() * 8
 	}
-	
+
 	if am.timeWheel != nil {
 		am.metrics["time_wheel_tasks"] = am.timeWheel.GetTaskCount()
 	}
-	
+
 	if am.prefixTree != nil {
 		am.metrics["prefix_tree_rules"] = am.prefixTree.Size()
 	}
@@ -507,7 +507,7 @@ func (am *AlgorithmManager) ExportState() (map[string]interface{}, error) {
 	defer am.mu.RUnlock()
 
 	state := make(map[string]interface{})
-	
+
 	// 导出滑动窗口状态
 	slidingWindowState := make(map[string]interface{})
 	for name, window := range am.slidingWindows {
@@ -517,16 +517,16 @@ func (am *AlgorithmManager) ExportState() (map[string]interface{}, error) {
 		}
 	}
 	state["sliding_windows"] = slidingWindowState
-	
+
 	// 导出布隆过滤器状态
 	if am.bloomFilter != nil {
 		state["bloom_filter"] = map[string]interface{}{
-			"size":     am.bloomFilter.Cap(),
-			"k":        am.bloomFilter.K(),
-			"bit_set":  "bitmap_data", // 简化处理
+			"size":    am.bloomFilter.Cap(),
+			"k":       am.bloomFilter.K(),
+			"bit_set": "bitmap_data", // 简化处理
 		}
 	}
-	
+
 	// 导出前缀树状态
 	if am.prefixTree != nil {
 		state["prefix_tree"] = am.prefixTree.Export()

@@ -1,4 +1,4 @@
-package storage
+package broker
 
 import (
 	"context"
@@ -21,17 +21,17 @@ type RedisStorage struct {
 
 // RedisConfig Redis配置
 type RedisConfig struct {
-	Addresses     []string      `json:"addresses"`
-	Password      string        `json:"password"`
-	DB            int           `json:"db"`
-	PoolSize      int           `json:"pool_size"`
-	KeyPrefix     string        `json:"key_prefix"`
-	DefaultTTL    time.Duration `json:"default_ttl"`
-	EnableCluster bool          `json:"enable_cluster"`
+	Addresses      []string      `json:"addresses"`
+	Password       string        `json:"password"`
+	DB             int           `json:"db"`
+	PoolSize       int           `json:"pool_size"`
+	KeyPrefix      string        `json:"key_prefix"`
+	DefaultTTL     time.Duration `json:"default_ttl"`
+	EnableCluster  bool          `json:"enable_cluster"`
 	EnableSentinel bool          `json:"enable_sentinel"`
-	SentinelAddrs []string      `json:"sentinel_addrs"`
-	SentinelMaster string       `json:"sentinel_master"`
-	Address       string        `json:"address"`
+	SentinelAddrs  []string      `json:"sentinel_addrs"`
+	SentinelMaster string        `json:"sentinel_master"`
+	Address        string        `json:"address"`
 }
 
 // NewRedisStorage 创建Redis存储
@@ -374,11 +374,11 @@ func (s *RedisStorage) GetStats(ctx context.Context) (map[string]interface{}, er
 	// 简单的信息解析
 	stats := make(map[string]interface{})
 	stats["info"] = info
-	
+
 	// 获取连接池状态
 	poolStats := s.client.PoolStats()
 	stats["pool_stats"] = poolStats
-	
+
 	return stats, nil
 }
 
@@ -398,14 +398,14 @@ type MetricsData struct {
 // SaveMetricsData 保存指标数据
 func (s *RedisStorage) SaveMetricsData(ctx context.Context, data *MetricsData) error {
 	key := fmt.Sprintf("metrics:%s:%d", data.HostID, data.Timestamp)
-	
+
 	// 使用哈希结构存储指标数据
 	pipe := s.client.Pipeline()
-	
+
 	// 存储基本信息
 	pipe.HSet(ctx, s.formatKey(key), "host_id", data.HostID)
 	pipe.HSet(ctx, s.formatKey(key), "timestamp", data.Timestamp)
-	
+
 	// 存储指标
 	if data.Metrics != nil {
 		for k, v := range data.Metrics {
@@ -413,27 +413,27 @@ func (s *RedisStorage) SaveMetricsData(ctx context.Context, data *MetricsData) e
 			pipe.HSet(ctx, s.formatKey(key), fmt.Sprintf("metric:%s", k), metricData)
 		}
 	}
-	
+
 	// 存储标签
 	if data.Tags != nil {
 		for k, v := range data.Tags {
 			pipe.HSet(ctx, s.formatKey(key), fmt.Sprintf("tag:%s", k), v)
 		}
 	}
-	
+
 	// 设置过期时间（默认7天）
 	pipe.Expire(ctx, s.formatKey(key), 7*24*time.Hour)
-	
+
 	// 添加到时间序列索引
 	indexKey := fmt.Sprintf("index:metrics:%s", data.HostID)
 	pipe.ZAdd(ctx, s.formatKey(indexKey), redis.Z{
 		Score:  float64(data.Timestamp),
 		Member: key,
 	})
-	
+
 	// 设置索引过期时间
 	pipe.Expire(ctx, s.formatKey(indexKey), 7*24*time.Hour)
-	
+
 	_, err := pipe.Exec(ctx)
 	return err
 }
@@ -441,17 +441,17 @@ func (s *RedisStorage) SaveMetricsData(ctx context.Context, data *MetricsData) e
 // GetMetricsData 获取指标数据
 func (s *RedisStorage) GetMetricsData(ctx context.Context, hostID string, timestamp int64) (*MetricsData, error) {
 	key := fmt.Sprintf("metrics:%s:%d", hostID, timestamp)
-	
+
 	// 获取哈希所有字段
 	result, err := s.client.HGetAll(ctx, s.formatKey(key)).Result()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if len(result) == 0 {
 		return nil, fmt.Errorf("metrics data not found")
 	}
-	
+
 	// 解析数据
 	data := &MetricsData{
 		HostID:    result["host_id"],
@@ -459,7 +459,7 @@ func (s *RedisStorage) GetMetricsData(ctx context.Context, hostID string, timest
 		Metrics:   make(map[string]interface{}),
 		Tags:      make(map[string]string),
 	}
-	
+
 	// 解析指标
 	for k, v := range result {
 		if strings.HasPrefix(k, "metric:") {
@@ -473,25 +473,25 @@ func (s *RedisStorage) GetMetricsData(ctx context.Context, hostID string, timest
 			data.Tags[tagKey] = v
 		}
 	}
-	
+
 	return data, nil
 }
 
 // GetMetricsDataRange 获取时间范围内的指标数据
 func (s *RedisStorage) GetMetricsDataRange(ctx context.Context, hostID string, start, end int64) ([]*MetricsData, error) {
 	indexKey := fmt.Sprintf("index:metrics:%s", hostID)
-	
+
 	// 获取时间范围内的键
 	zRangeCmd := s.client.ZRangeByScore(ctx, s.formatKey(indexKey), &redis.ZRangeBy{
 		Min: fmt.Sprintf("%d", start),
 		Max: fmt.Sprintf("%d", end),
 	})
-	
+
 	keys, err := zRangeCmd.Result()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// 批量获取数据
 	var metrics []*MetricsData
 	for _, key := range keys {
@@ -505,7 +505,7 @@ func (s *RedisStorage) GetMetricsDataRange(ctx context.Context, hostID string, s
 			}
 		}
 	}
-	
+
 	return metrics, nil
 }
 
@@ -513,12 +513,12 @@ func (s *RedisStorage) GetMetricsDataRange(ctx context.Context, hostID string, s
 func (s *RedisStorage) DeleteMetricsData(ctx context.Context, hostID string, timestamp int64) error {
 	key := fmt.Sprintf("metrics:%s:%d", hostID, timestamp)
 	indexKey := fmt.Sprintf("index:metrics:%s", hostID)
-	
+
 	// 删除数据和索引
 	pipe := s.client.Pipeline()
 	pipe.Del(ctx, s.formatKey(key))
 	pipe.ZRem(ctx, s.formatKey(indexKey), key)
-	
+
 	_, err := pipe.Exec(ctx)
 	return err
 }
@@ -530,14 +530,14 @@ func (s *RedisStorage) AggregateMetrics(ctx context.Context, hostID string, star
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if len(metrics) == 0 {
 		return map[string]interface{}{}, nil
 	}
-	
+
 	// 简单聚合计算
 	aggregated := make(map[string]interface{})
-	
+
 	// 按指标名称聚合
 	metricValues := make(map[string][]float64)
 	for _, data := range metrics {
@@ -547,14 +547,14 @@ func (s *RedisStorage) AggregateMetrics(ctx context.Context, hostID string, star
 			}
 		}
 	}
-	
+
 	// 计算统计值
 	for metricName, values := range metricValues {
 		if len(values) > 0 {
 			sum := 0.0
 			min := values[0]
 			max := values[0]
-			
+
 			for _, v := range values {
 				sum += v
 				if v < min {
@@ -564,9 +564,9 @@ func (s *RedisStorage) AggregateMetrics(ctx context.Context, hostID string, star
 					max = v
 				}
 			}
-			
+
 			avg := sum / float64(len(values))
-			
+
 			aggregated[metricName] = map[string]interface{}{
 				"count": len(values),
 				"sum":   sum,
@@ -576,6 +576,6 @@ func (s *RedisStorage) AggregateMetrics(ctx context.Context, hostID string, star
 			}
 		}
 	}
-	
+
 	return aggregated, nil
 }
