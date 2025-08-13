@@ -1,0 +1,765 @@
+package test
+
+import (
+	"fmt"
+	"log"
+	"os"
+	"runtime"
+	"sync"
+	"testing"
+	"time"
+)
+
+// EnhancedAgentTests 增强的Agent测试套件
+func EnhancedAgentTests() *TestSuite {
+	return &TestSuite{
+		Name: "EnhancedAgentTests",
+		Setup: func() error {
+			log.Println("设置增强Agent测试环境")
+			return nil
+		},
+		Teardown: func() error {
+			log.Println("清理增强Agent测试环境")
+			return nil
+		},
+		TestCases: []TestCase{
+			{
+				Name: "TestMetricsDataStructure",
+				TestFunc: func(t *testing.T) error {
+					// 测试指标数据结构的基本功能
+					// 这里我们测试数据结构的概念，而不是具体的实现
+					
+					// 模拟指标数据
+					type Metric struct {
+						Name  string
+						Value float64
+					}
+					
+					type MetricsData struct {
+						HostID    string
+						Timestamp time.Time
+						Metrics   []Metric
+					}
+					
+					// 创建测试数据
+					data := MetricsData{
+						HostID:    "test-host",
+						Timestamp: time.Now(),
+						Metrics: []Metric{
+							{Name: "cpu_usage", Value: 45.5},
+							{Name: "memory_usage", Value: 1024.0},
+							{Name: "network_rx", Value: 1000000.0},
+						},
+					}
+					
+					// 验证数据
+					if data.HostID == "" {
+						return fmt.Errorf("HostID不应该为空")
+					}
+					
+					if data.Timestamp.IsZero() {
+						return fmt.Errorf("Timestamp不应该为零")
+					}
+					
+					if len(data.Metrics) == 0 {
+						return fmt.Errorf("Metrics不应该为空")
+					}
+					
+					// 验证指标值
+					for _, metric := range data.Metrics {
+						if metric.Name == "" {
+							return fmt.Errorf("指标名称不应该为空")
+						}
+						if metric.Value < 0 {
+							return fmt.Errorf("指标值不应该为负数")
+						}
+					}
+					
+					return nil
+				},
+			},
+			{
+				Name: "TestDataCollectionSimulation",
+				TestFunc: func(t *testing.T) error {
+					// 模拟数据采集过程
+					
+					// 模拟采集间隔
+					interval := 100 * time.Millisecond
+					collections := 10
+					
+					var collectedData []time.Time
+					var mu sync.Mutex
+					
+					// 模拟并发采集
+					var wg sync.WaitGroup
+					for i := 0; i < 3; i++ {
+						wg.Add(1)
+						go func(collectorID int) {
+							defer wg.Done()
+							
+							for j := 0; j < collections; j++ {
+								// 模拟采集耗时
+								time.Sleep(interval / 2)
+								
+								mu.Lock()
+								collectedData = append(collectedData, time.Now())
+								mu.Unlock()
+								
+								time.Sleep(interval / 2)
+							}
+						}(i)
+					}
+					
+					wg.Wait()
+					
+					// 验证采集数据
+					expectedCollections := 3 * collections
+					if len(collectedData) != expectedCollections {
+						return fmt.Errorf("期望采集 %d 次数据，实际采集 %d 次", 
+							expectedCollections, len(collectedData))
+					}
+					
+					// 验证时间分布
+					if len(collectedData) > 1 {
+						firstTime := collectedData[0]
+						lastTime := collectedData[len(collectedData)-1]
+						duration := lastTime.Sub(firstTime)
+						
+						// 采集应该在合理时间内完成
+						expectedDuration := time.Duration(collections) * interval
+						if duration > expectedDuration*2 {
+							return fmt.Errorf("采集时间过长，期望约 %v，实际 %v", 
+								expectedDuration, duration)
+						}
+					}
+					
+					return nil
+				},
+			},
+			{
+				Name: "TestConfigurationValidation",
+				TestFunc: func(t *testing.T) error {
+					// 测试配置验证逻辑
+					
+					// 模拟配置结构
+					type AgentConfig struct {
+						HostID     string
+						BrokerAddr string
+						Interval   time.Duration
+					}
+					
+					// 测试有效配置
+					validConfigs := []AgentConfig{
+						{
+							HostID:     "agent-1",
+							BrokerAddr: "localhost:9093",
+							Interval:   time.Second,
+						},
+						{
+							HostID:     "agent-2",
+							BrokerAddr: "192.168.1.100:9093",
+							Interval:   5 * time.Second,
+						},
+					}
+					
+					for i, config := range validConfigs {
+						if config.HostID == "" {
+							return fmt.Errorf("配置 %d: HostID不应该为空", i)
+						}
+						if config.BrokerAddr == "" {
+							return fmt.Errorf("配置 %d: BrokerAddr不应该为空", i)
+						}
+						if config.Interval <= 0 {
+							return fmt.Errorf("配置 %d: Interval应该大于0", i)
+						}
+					}
+					
+					// 测试无效配置
+					invalidConfigs := []AgentConfig{
+						{HostID: "", BrokerAddr: "localhost:9093", Interval: time.Second},
+						{HostID: "agent-1", BrokerAddr: "", Interval: time.Second},
+						{HostID: "agent-1", BrokerAddr: "localhost:9093", Interval: 0},
+					}
+					
+					for i, config := range invalidConfigs {
+						errors := 0
+						if config.HostID == "" {
+							errors++
+						}
+						if config.BrokerAddr == "" {
+							errors++
+						}
+						if config.Interval <= 0 {
+							errors++
+						}
+						if errors == 0 {
+							return fmt.Errorf("配置 %d 应该被标记为无效", i)
+						}
+					}
+					
+					return nil
+				},
+			},
+		},
+	}
+}
+
+// EnhancedBrokerTests 增强的Broker测试套件
+func EnhancedBrokerTests() *TestSuite {
+	return &TestSuite{
+		Name: "EnhancedBrokerTests",
+		Setup: func() error {
+			log.Println("设置增强Broker测试环境")
+			return nil
+		},
+		Teardown: func() error {
+			log.Println("清理增强Broker测试环境")
+			return nil
+		},
+		TestCases: []TestCase{
+			{
+				Name: "TestConsistentHashSimulation",
+				TestFunc: func(t *testing.T) error {
+					// 模拟一致性哈希算法
+					
+					// 简单的哈希函数模拟
+					simpleHash := func(key string) int {
+						hash := 0
+						for _, c := range key {
+							hash = (hash << 5) + hash + int(c)
+						}
+						return hash
+					}
+					
+					// 模拟节点
+					nodes := []string{"node-1", "node-2", "node-3"}
+					
+					// 测试数据分布
+					distribution := make(map[string]int)
+					testKeys := 1000
+					
+					for i := 0; i < testKeys; i++ {
+						key := fmt.Sprintf("key-%d", i)
+						hash := simpleHash(key)
+						nodeIndex := hash % len(nodes)
+						selectedNode := nodes[nodeIndex]
+						distribution[selectedNode]++
+					}
+					
+					// 验证分布
+					if len(distribution) != len(nodes) {
+						return fmt.Errorf("期望分布到%d个节点，实际分布到%d个", 
+							len(nodes), len(distribution))
+					}
+					
+					// 验证每个节点都有数据
+					for _, node := range nodes {
+						if distribution[node] == 0 {
+							return fmt.Errorf("节点 %s 没有数据", node)
+						}
+					}
+					
+					// 验证负载均衡
+					expectedPerNode := testKeys / len(nodes)
+					tolerance := expectedPerNode / 3 // 33%容错
+					
+					for _, node := range nodes {
+						count := distribution[node]
+						if count < expectedPerNode-tolerance || count > expectedPerNode+tolerance {
+							return fmt.Errorf("节点 %s 负载不均衡，期望 %d±%d，实际 %d", 
+								node, expectedPerNode, tolerance, count)
+						}
+					}
+					
+					return nil
+				},
+			},
+			{
+				Name: "TestMessageQueueSimulation",
+				TestFunc: func(t *testing.T) error {
+					// 模拟消息队列操作
+					
+					type Message struct {
+						ID        string
+						Topic     string
+						Payload   []byte
+						Timestamp time.Time
+					}
+					
+					// 模拟消息队列
+					queue := make(chan Message, 100)
+					
+					// 生产者
+					messagesToSend := 50
+					go func() {
+						for i := 0; i < messagesToSend; i++ {
+							msg := Message{
+								ID:        fmt.Sprintf("msg-%d", i),
+								Topic:     "test-topic",
+								Payload:   []byte(fmt.Sprintf("payload-%d", i)),
+								Timestamp: time.Now(),
+							}
+							queue <- msg
+						}
+						close(queue)
+					}()
+					
+					// 消费者
+					messagesReceived := 0
+					for msg := range queue {
+						if msg.ID == "" {
+							return fmt.Errorf("消息ID不应该为空")
+						}
+						if len(msg.Payload) == 0 {
+							return fmt.Errorf("消息载荷不应该为空")
+						}
+						messagesReceived++
+					}
+					
+					if messagesReceived != messagesToSend {
+						return fmt.Errorf("期望接收 %d 条消息，实际接收 %d 条", 
+							messagesToSend, messagesReceived)
+					}
+					
+					return nil
+				},
+			},
+			{
+				Name: "TestHostRegistrySimulation",
+				TestFunc: func(t *testing.T) error {
+					// 模拟主机注册表
+					
+					type HostInfo struct {
+						ID       string
+						Address  string
+						Port     int
+						Status   string
+						LastSeen time.Time
+					}
+					
+					// 模拟主机注册表
+					registry := make(map[string]HostInfo)
+					var mu sync.RWMutex
+					
+					// 注册主机
+					hosts := []HostInfo{
+						{
+							ID:      "host-1",
+							Address: "192.168.1.100",
+							Port:    9093,
+							Status:  "healthy",
+						},
+						{
+							ID:      "host-2",
+							Address: "192.168.1.101",
+							Port:    9093,
+							Status:  "healthy",
+						},
+					}
+					
+					for _, host := range hosts {
+						host.LastSeen = time.Now()
+						mu.Lock()
+						registry[host.ID] = host
+						mu.Unlock()
+					}
+					
+					// 验证主机注册
+					mu.RLock()
+					if len(registry) != len(hosts) {
+						mu.RUnlock()
+						return fmt.Errorf("期望注册 %d 个主机，实际注册 %d 个", 
+							len(hosts), len(registry))
+					}
+					
+					// 验证主机信息
+					for _, expected := range hosts {
+						actual, exists := registry[expected.ID]
+						if !exists {
+							mu.RUnlock()
+							return fmt.Errorf("主机 %s 未注册", expected.ID)
+						}
+						if actual.Address != expected.Address {
+							mu.RUnlock()
+							return fmt.Errorf("主机 %s 地址不匹配", expected.ID)
+						}
+					}
+					mu.RUnlock()
+					
+					return nil
+				},
+			},
+		},
+	}
+}
+
+// EnhancedPerformanceTests 增强的性能测试套件
+func EnhancedPerformanceTests() *TestSuite {
+	return &TestSuite{
+		Name: "EnhancedPerformanceTests",
+		Setup: func() error {
+			log.Println("设置增强性能测试环境")
+			return nil
+		},
+		Teardown: func() error {
+			log.Println("清理增强性能测试环境")
+			return nil
+		},
+		TestCases: []TestCase{
+			{
+				Name: "TestConcurrentProcessing",
+				TestFunc: func(t *testing.T) error {
+					// 测试并发处理能力
+					
+					concurrency := 10
+					iterations := 100
+					
+					var wg sync.WaitGroup
+					errors := make(chan error, concurrency)
+					
+					startTime := time.Now()
+					
+					for i := 0; i < concurrency; i++ {
+						wg.Add(1)
+						go func(workerID int) {
+							defer wg.Done()
+							
+							for j := 0; j < iterations; j++ {
+								// 模拟一些计算工作
+								result := 0
+								for k := 0; k < 1000; k++ {
+									result += k
+								}
+								
+								// 模拟一些延迟
+								time.Sleep(time.Millisecond)
+								
+								if result == 0 { // 防止编译器优化
+									errors <- fmt.Errorf("worker %d: 计算错误", workerID)
+									return
+								}
+							}
+						}(i)
+					}
+					
+					wg.Wait()
+					close(errors)
+					
+					duration := time.Since(startTime)
+					
+					// 检查错误
+					for err := range errors {
+						return err
+					}
+					
+					// 性能验证
+					operations := concurrency * iterations
+					opsPerSecond := float64(operations) / duration.Seconds()
+					
+					log.Printf("并发处理性能: %.0f ops/sec", opsPerSecond)
+					
+					// 应该能够处理至少1000 ops/sec
+					if opsPerSecond < 1000 {
+						return fmt.Errorf("并发处理性能不足: %.0f ops/sec < 1000 ops/sec", 
+							opsPerSecond)
+					}
+					
+					return nil
+				},
+			},
+			{
+				Name: "TestMemoryUsage",
+				TestFunc: func(t *testing.T) error {
+					// 测试内存使用情况
+					var m1, m2 runtime.MemStats
+					runtime.GC()
+					runtime.ReadMemStats(&m1)
+					
+					// 创建大量数据
+					data := make([][]float64, 1000)
+					for i := range data {
+						data[i] = make([]float64, 1000)
+						for j := range data[i] {
+							data[i][j] = float64(i * j)
+						}
+					}
+					
+					runtime.GC()
+					runtime.ReadMemStats(&m2)
+					
+					memoryUsed := m2.Alloc - m1.Alloc
+					log.Printf("内存使用: %d bytes", memoryUsed)
+					
+					// 内存应该在合理范围内
+					if memoryUsed > 100*1024*1024 { // 100MB
+						return fmt.Errorf("内存使用过多: %d bytes", memoryUsed)
+					}
+					
+					return nil
+				},
+			},
+			{
+				Name: "TestDataStructurePerformance",
+				TestFunc: func(t *testing.T) error {
+					// 测试数据结构性能
+					
+					// 测试map操作
+					startTime := time.Now()
+					
+					testMap := make(map[string]int)
+					for i := 0; i < 10000; i++ {
+						key := fmt.Sprintf("key-%d", i)
+						testMap[key] = i
+					}
+					
+					for i := 0; i < 10000; i++ {
+						key := fmt.Sprintf("key-%d", i)
+						_ = testMap[key]
+					}
+					
+					mapDuration := time.Since(startTime)
+					log.Printf("Map操作耗时: %v", mapDuration)
+					
+					// 测试slice操作
+					startTime = time.Now()
+					
+					testSlice := make([]int, 10000)
+					for i := 0; i < 10000; i++ {
+						testSlice[i] = i
+					}
+					
+					for i := 0; i < 10000; i++ {
+						_ = testSlice[i]
+					}
+					
+					sliceDuration := time.Since(startTime)
+					log.Printf("Slice操作耗时: %v", sliceDuration)
+					
+					// 性能验证
+					if mapDuration > time.Second {
+						return fmt.Errorf("Map操作性能不足: %v", mapDuration)
+					}
+					
+					if sliceDuration > time.Second {
+						return fmt.Errorf("Slice操作性能不足: %v", sliceDuration)
+					}
+					
+					return nil
+				},
+			},
+		},
+	}
+}
+
+// EnhancedIntegrationTests 增强的集成测试套件
+func EnhancedIntegrationTests() *TestSuite {
+	return &TestSuite{
+		Name: "EnhancedIntegrationTests",
+		Setup: func() error {
+			log.Println("设置增强集成测试环境")
+			return nil
+		},
+		Teardown: func() error {
+			log.Println("清理增强集成测试环境")
+			return nil
+		},
+		TestCases: []TestCase{
+			{
+				Name: "TestConfigurationFiles",
+				TestFunc: func(t *testing.T) error {
+					// 测试配置文件存在性和基本格式
+					
+					configFiles := []string{
+						"configs/agent.yaml",
+						"configs/broker.yaml",
+						"configs/visualization.yaml",
+					}
+					
+					for _, configFile := range configFiles {
+						// 检查文件存在
+						if _, err := os.Stat(configFile); os.IsNotExist(err) {
+							return fmt.Errorf("配置文件不存在: %s", configFile)
+						}
+						
+						// 读取文件内容
+						content, err := os.ReadFile(configFile)
+						if err != nil {
+							return fmt.Errorf("读取配置文件失败: %s", configFile)
+						}
+						
+						// 基本验证
+						if len(content) == 0 {
+							return fmt.Errorf("配置文件为空: %s", configFile)
+						}
+						
+						// 检查基本YAML结构
+						contentStr := string(content)
+						if len(contentStr) < 100 {
+							return fmt.Errorf("配置文件内容过短: %s", configFile)
+						}
+						
+						log.Printf("配置文件 %s 验证通过", configFile)
+					}
+					
+					return nil
+				},
+			},
+			{
+				Name: "TestBuildArtifacts",
+				TestFunc: func(t *testing.T) error {
+					// 测试构建产物
+					
+					binaries := []string{
+						"bin/agent",
+						"bin/broker",
+						"bin/visualization",
+					}
+					
+					for _, binary := range binaries {
+						// 检查二进制文件存在
+						if _, err := os.Stat(binary); os.IsNotExist(err) {
+							return fmt.Errorf("二进制文件不存在: %s", binary)
+						}
+						
+						// 检查文件大小
+						info, err := os.Stat(binary)
+						if err != nil {
+							return fmt.Errorf("获取二进制文件信息失败: %s", binary)
+						}
+						
+						if info.Size() < 1000000 { // 至少1MB
+							return fmt.Errorf("二进制文件过小: %s (%d bytes)", 
+								binary, info.Size())
+						}
+						
+						log.Printf("二进制文件 %s 验证通过 (%d bytes)", binary, info.Size())
+					}
+					
+					return nil
+				},
+			},
+			{
+				Name: "TestProtocolFiles",
+				TestFunc: func(t *testing.T) error {
+					// 测试协议文件
+					
+					protoFiles := []string{
+						"proto/monitor.proto",
+						"proto/monitor.pb.go",
+						"proto/monitor_grpc.pb.go",
+					}
+					
+					for _, protoFile := range protoFiles {
+						if _, err := os.Stat(protoFile); os.IsNotExist(err) {
+							return fmt.Errorf("协议文件不存在: %s", protoFile)
+						}
+						
+						// 检查文件内容
+						content, err := os.ReadFile(protoFile)
+						if err != nil {
+							return fmt.Errorf("读取协议文件失败: %s", protoFile)
+						}
+						
+						if len(content) == 0 {
+							return fmt.Errorf("协议文件为空: %s", protoFile)
+						}
+						
+						log.Printf("协议文件 %s 验证通过", protoFile)
+					}
+					
+					return nil
+				},
+			},
+			{
+				Name: "TestSystemIntegration",
+				TestFunc: func(t *testing.T) error {
+					// 测试系统集成
+					
+					// 检查必要的目录
+					requiredDirs := []string{
+						"agent",
+						"broker",
+						"visualization",
+						"proto",
+						"configs",
+						"test",
+					}
+					
+					for _, dir := range requiredDirs {
+						if _, err := os.Stat(dir); os.IsNotExist(err) {
+							return fmt.Errorf("必要目录不存在: %s", dir)
+						}
+					}
+					
+					// 检查关键文件
+					keyFiles := []string{
+						"Makefile",
+						"go.mod",
+						"go.sum",
+						"README.md",
+					}
+					
+					for _, file := range keyFiles {
+						if _, err := os.Stat(file); os.IsNotExist(err) {
+							return fmt.Errorf("关键文件不存在: %s", file)
+						}
+					}
+					
+					log.Printf("系统集成验证通过")
+					return nil
+				},
+			},
+		},
+	}
+}
+
+// RunEnhancedTests 运行增强测试
+func RunEnhancedTests() error {
+	runner, err := NewTestRunner()
+	if err != nil {
+		return fmt.Errorf("创建测试运行器失败: %v", err)
+	}
+	defer runner.Close()
+	
+	// 添加所有测试套件
+	runner.AddSuite(EnhancedAgentTests())
+	runner.AddSuite(EnhancedBrokerTests())
+	runner.AddSuite(EnhancedPerformanceTests())
+	runner.AddSuite(EnhancedIntegrationTests())
+	
+	// 运行测试
+	results := runner.Run()
+	
+	// 统计结果
+	total := len(results)
+	passed := 0
+	failed := 0
+	
+	for _, result := range results {
+		if result.Passed {
+			passed++
+		} else {
+			failed++
+		}
+	}
+	
+	// 输出结果
+	fmt.Printf("\n=== 增强测试结果汇总 ===\n")
+	fmt.Printf("总测试数: %d\n", total)
+	fmt.Printf("通过: %d\n", passed)
+	fmt.Printf("失败: %d\n", failed)
+	fmt.Printf("成功率: %.1f%%\n", float64(passed)/float64(total)*100)
+	
+	if failed > 0 {
+		fmt.Printf("\n失败的测试:\n")
+		for _, result := range results {
+			if !result.Passed {
+				fmt.Printf("- %s.%s: %v\n", result.SuiteName, result.TestCase, result.Error)
+			}
+		}
+		return fmt.Errorf("有%d个测试失败", failed)
+	}
+	
+	fmt.Printf("\n🎉 所有增强测试通过！\n")
+	return nil
+}

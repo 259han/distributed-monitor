@@ -1,0 +1,126 @@
+# 分布式消息中转层配置
+
+# 节点配置
+node:
+  id: "broker-1"
+  address: "localhost:9095"
+
+# 集群配置
+cluster:
+  endpoints:
+    - "localhost:9095"
+
+# Raft配置
+raft:
+  log_dir: "data/raft/logs"
+  snapshot_dir: "data/raft/snapshots"
+  heartbeat_timeout: 500ms
+  election_timeout: 1s
+
+# 存储配置
+storage:
+  redis:
+    addr: "localhost:6379"
+    password: ""
+    db: 0
+    key_prefix: "monitor:"
+
+# 一致性哈希配置
+hash:
+  virtual_nodes: 50
+
+# gRPC配置
+grpc:
+  port: 9093
+  max_recv_msg_size: 4194304  # 4MB
+  max_send_msg_size: 4194304  # 4MB
+
+# Raft gRPC配置
+raft_grpc:
+  port: 9094
+
+# QUIC配置
+quic:
+  enable: false  # QUIC开关，默认禁用
+  port: 8082
+  max_streams_per_conn: 100
+  keep_alive_period: 30s
+  max_idle_timeout: 60s
+  buffer_size: 256
+  visualization_addr: "localhost:8081"  # 可视化组件地址
+
+# 日志配置
+log:
+  level: "info"
+  format: "json"
+  output: "logs/broker.log"
+
+# 高级配置
+advanced:
+  buffer_size: 1000
+
+# 动态主机管理配置
+host_management:
+  enabled: true
+  enable_scaling: true
+  max_hosts: 100
+  
+  # 注册表配置
+  registry:
+    heartbeat_interval: 30s
+    health_check_interval: 60s
+    offline_timeout: 300s
+    cleanup_interval: 600s
+  
+  # 发现服务配置
+  discovery:
+    listen_port: 9096
+    scan_interval: 300s
+    scan_timeout: 10s
+    enable_multicast: true
+    enable_http: true
+    enable_file_watch: true
+    network_ranges:
+      - "192.168.1.0/24"
+      - "10.0.0.0/24"
+    discovery_types:
+      - "tcp"
+      - "http"
+      - "grpc"
+    service_port_range: "9000-10000"
+  
+  # 健康监控配置
+  health:
+    check_interval: 60s
+    timeout: 5s
+    max_retries: 3
+    enable_tcp: true
+    enable_http: true
+    enable_custom: false
+    tcp_ports:
+      - 22
+      - 80
+      - 443
+      - 9093
+      - 9095
+    http_paths:
+      - "/health"
+      - "/ping"
+    alert_thresholds:
+      cpu: 80.0
+      memory: 85.0
+      disk: 90.0
+  
+  # 自动移除配置
+  auto_remove:
+    enabled: true
+    unhealthy_timeout: 600s
+    offline_timeout: 1200s
+  
+  # 扩缩容配置
+  scaling:
+    enabled: true
+    scale_up_threshold: 50
+    scale_down_threshold: 75
+    min_hosts: 3
+    max_hosts: 100 

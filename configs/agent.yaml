@@ -1,0 +1,90 @@
+# 数据采集代理配置
+
+# 代理基本配置
+agent:
+  host_id: "host-1"
+  hostname: "localhost"
+  ip: "127.0.0.1"
+
+# 采集配置
+collect:
+  interval: 1s
+  batch_size: 100
+  max_retry: 3
+  metrics:
+    - cpu
+    - memory
+    - disk
+    - network
+
+# 中转层配置
+broker:
+  endpoints:
+    - "localhost:9093"
+  timeout: 5s
+
+# QUIC配置
+quic:
+  enable: false  # QUIC开关，默认禁用
+  server_addr: "localhost:8081"
+  timeout: 5s
+  max_retries: 3
+  retry_interval: 1s
+  keep_alive_period: 30s
+  max_idle_timeout: 60s
+  heartbeat_interval: 10s
+
+# 日志配置
+log:
+  level: "info"
+  path: "logs/agent.log"
+  max_size: 10
+  max_backups: 3
+  max_age: 7
+  compress: true
+
+# 高级配置
+advanced:
+  ring_buffer_size: 2000
+  bloom_filter_size: 100000
+  bloom_filter_fp_rate: 0.001
+  time_wheel_tick: 100
+  time_wheel_buckets: 60
+  max_goroutines: 1000
+
+# 主机注册配置
+host_registry:
+  enable: true
+  update_interval: 30s
+  max_hosts: 1000
+  health_check: true
+  retry_interval: 5s
+
+# 算法配置
+algorithms:
+  sliding_window:
+    enable: true
+    size: 10
+    max_age: 10s
+    adaptive: true
+    min_size: 5
+    max_size: 100
+    growth_factor: 1.5
+    shrink_factor: 0.8
+  bloom_filter:
+    enable: true
+    size: 100000
+    false_positive: 0.001
+    hash_funcs: 3
+  time_wheel:
+    enable: true
+    tick_interval: 100ms
+    slot_num: 60
+    multi_level: true
+    max_tasks: 10000
+  prefix_tree:
+    enable: true
+    max_depth: 32
+    compress: true
+    wildcard: true
+    case_sensitive: false 

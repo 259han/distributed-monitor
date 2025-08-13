@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>监控系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 600;
+        }
+
+        .auth-section {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+
+        .btn-primary:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+
+        .card h3 {
+            margin-bottom: 15px;
+            color: #667eea;
+            font-size: 1.2rem;
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #333;
+            margin: 10px 0;
+        }
+
+        .metric-label {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 20px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-online {
+            background: #4CAF50;
+        }
+
+        .status-offline {
+            background: #f44336;
+        }
+
+        .status-warning {
+            background: #ff9800;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .topk-list {
+            list-style: none;
+        }
+
+        .topk-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .topk-rank {
+            background: #667eea;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .topk-host {
+            flex: 1;
+            margin-left: 10px;
+        }
+
+        .topk-value {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .alert-item {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            border-left: 4px solid;
+        }
+
+        .alert-critical {
+            background: #ffebee;
+            border-color: #f44336;
+        }
+
+        .alert-warning {
+            background: #fff3e0;
+            border-color: #ff9800;
+        }
+
+        .alert-info {
+            background: #e3f2fd;
+            border-color: #2196f3;
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 15px;
+            border-radius: 4px;
+            font-size: 14px;
+            z-index: 1000;
+        }
+
+        .connection-connected {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .connection-disconnected {
+            background: #f44336;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <h1>监控系统</h1>
+            <div class="auth-section">
+                <span id="userInfo">监控系统</span>
+            </div>
+        </div>
+    </header>
+
+    <div id="connectionStatus" class="connection-status connection-disconnected">
+        WebSocket: 未连接
+    </div>
+
+    <div class="container">
+        <!-- 主仪表板 -->
+        <div id="dashboard">
+            <div class="dashboard">
+                <!-- 系统状态 -->
+                <div class="card">
+                    <h3>系统状态</h3>
+                    <div id="systemStatus">
+                        <div><span class="status-indicator status-online"></span>Agent: 在线</div>
+                        <div><span class="status-indicator status-online"></span>Broker: 在线</div>
+                        <div><span class="status-indicator status-online"></span>Database: 在线</div>
+                    </div>
+                </div>
+
+                <!-- CPU使用率 -->
+                <div class="card">
+                    <h3>CPU使用率</h3>
+                    <div class="metric-value" id="cpuUsage">--</div>
+                    <div class="metric-label">当前使用率</div>
+                    <div class="chart-container">
+                        <canvas id="cpuChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 内存使用率 -->
+                <div class="card">
+                    <h3>内存使用率</h3>
+                    <div class="metric-value" id="memoryUsage">--</div>
+                    <div class="metric-label">当前使用率</div>
+                    <div class="chart-container">
+                        <canvas id="memoryChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- TopK主机 -->
+                <div class="card">
+                    <h3>CPU使用率 Top5</h3>
+                    <ul id="topkList" class="topk-list">
+                        <!-- 动态生成 -->
+                    </ul>
+                </div>
+
+                <!-- 告警信息 -->
+                <div class="card">
+                    <h3>告警信息</h3>
+                    <div id="alertsContainer">
+                        <!-- 动态生成 -->
+                    </div>
+                </div>
+
+                <!-- 网络流量 -->
+                <div class="card">
+                    <h3>网络流量</h3>
+                    <div class="metric-value" id="networkTraffic">--</div>
+                    <div class="metric-label">当前流量</div>
+                    <div class="chart-container">
+                        <canvas id="networkChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 详细指标列表 -->
+                <div class="card">
+                    <h3>详细指标</h3>
+                    <div id="allMetrics" style="max-height: 320px; overflow: auto; font-family: monospace; font-size: 13px; line-height: 1.6;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 引入Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- 引入主应用脚本 -->
+    <script src="app.js"></script>
+</body>
+</html>
