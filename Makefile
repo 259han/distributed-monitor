@@ -27,7 +27,7 @@ build-broker: proto
 build-viz: proto build-cpp
 	@echo "构建可视化分析端..."
 	@mkdir -p bin
-	@export LD_LIBRARY_PATH=./bin/lib:$$LD_LIBRARY_PATH && go build -buildvcs=false -tags cgo -o bin/visualization ./visualization/cmd
+	@export LD_LIBRARY_PATH=./bin/lib:$$LD_LIBRARY_PATH && go build -buildvcs=false -tags cgo -ldflags "-extldflags '-L./bin/lib -lstreaming_topk -lstdc++ -lpthread'" -o bin/visualization ./visualization/cmd
 
 run-agent:
 	@echo "运行数据采集代理..."
@@ -62,10 +62,10 @@ build-c:
 build-cpp:
 	@echo "构建C++模块..."
 	@mkdir -p bin/cpp bin/lib
-	@echo "编译Top-K模块..."
-	@g++ -Wall -Wextra -O2 -std=c++11 -pthread -DCOMPILE_TEST -o bin/cpp/topk_test ./visualization/internal/cpp/topk_shared.cpp ./visualization/internal/cpp/topk_test.cpp -lrt
-	@echo "编译C++ Top-K共享库..."
-	@g++ -shared -fPIC -Wall -Wextra -O2 -std=c++11 -pthread -o bin/lib/libtopk.so ./visualization/internal/cpp/topk_shared.cpp ./visualization/internal/cpp/topk_c_wrapper.cpp -lrt
+	@echo "编译流式Top-K模块..."
+	@cd ./visualization/internal/cpp && make all
+	@cp ./visualization/internal/cpp/libstreaming_topk.* ./bin/lib/
+	@echo "C++流式Top-K模块构建完成"
 
 test-c-cpp:
 	@echo "测试C/C++模块..."

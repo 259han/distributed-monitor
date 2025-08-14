@@ -100,77 +100,90 @@ func (s *Server) Broadcast(data *models.MetricsData) {
 	for _, metric := range data.Metrics {
 		// 转换指标名称
 		var frontendName string
+		var convertedValue float64
+		var convertedUnit string
+		
 		switch {
 		case metric.Name == "cpu.usage":
 			frontendName = "cpu_usage"
+			convertedValue = metric.Value
+			convertedUnit = metric.Unit
 		case metric.Name == "memory.usage":
 			frontendName = "memory_usage"
+			convertedValue = metric.Value
+			convertedUnit = metric.Unit
 		case strings.HasPrefix(metric.Name, "network.bandwidth."):
 			// 网络带宽指标
 			frontendName = "network_traffic"
 			// 将字节/秒转换为MB/s
-			metric.Value = metric.Value / (1024 * 1024)
-			metric.Unit = "MB/s"
+			convertedValue = metric.Value / (1024 * 1024)
+			convertedUnit = "MB/s"
 		case strings.HasPrefix(metric.Name, "network.rx_bytes."):
 			// 接收字节速率
 			frontendName = "network_rx"
 			// 将字节/秒转换为KB/s
-			metric.Value = metric.Value / 1024
-			metric.Unit = "KB/s"
+			convertedValue = metric.Value / 1024
+			convertedUnit = "KB/s"
 		case strings.HasPrefix(metric.Name, "network.tx_bytes."):
 			// 发送字节速率
 			frontendName = "network_tx"
 			// 将字节/秒转换为KB/s
-			metric.Value = metric.Value / 1024
-			metric.Unit = "KB/s"
+			convertedValue = metric.Value / 1024
+			convertedUnit = "KB/s"
 		case strings.HasPrefix(metric.Name, "network.connections."):
 			// 网络连接数
 			frontendName = "network_connections"
+			convertedValue = metric.Value
+			convertedUnit = metric.Unit
 		case strings.HasPrefix(metric.Name, "memory.total"):
 			frontendName = "memory_total"
 			// 将KB转换为GB
-			metric.Value = metric.Value / (1024 * 1024)
-			metric.Unit = "GB"
+			convertedValue = metric.Value / (1024 * 1024)
+			convertedUnit = "GB"
 		case strings.HasPrefix(metric.Name, "memory.used"):
 			frontendName = "memory_used"
 			// 将KB转换为GB
-			metric.Value = metric.Value / (1024 * 1024)
-			metric.Unit = "GB"
+			convertedValue = metric.Value / (1024 * 1024)
+			convertedUnit = "GB"
 		case strings.HasPrefix(metric.Name, "memory.free"):
 			frontendName = "memory_free"
 			// 将KB转换为GB
-			metric.Value = metric.Value / (1024 * 1024)
-			metric.Unit = "GB"
+			convertedValue = metric.Value / (1024 * 1024)
+			convertedUnit = "GB"
 		case strings.HasPrefix(metric.Name, "disk.usage."):
 			// 磁盘使用率
 			frontendName = "disk_usage"
+			convertedValue = metric.Value
+			convertedUnit = metric.Unit
 		case strings.HasPrefix(metric.Name, "disk.total."):
 			// 磁盘总容量
 			frontendName = "disk_total"
 			// 将字节转换为GB
-			metric.Value = metric.Value / (1024 * 1024 * 1024)
-			metric.Unit = "GB"
+			convertedValue = metric.Value / (1024 * 1024 * 1024)
+			convertedUnit = "GB"
 		case strings.HasPrefix(metric.Name, "disk.used."):
 			// 磁盘已使用
 			frontendName = "disk_used"
 			// 将字节转换为GB
-			metric.Value = metric.Value / (1024 * 1024 * 1024)
-			metric.Unit = "GB"
+			convertedValue = metric.Value / (1024 * 1024 * 1024)
+			convertedUnit = "GB"
 		case strings.HasPrefix(metric.Name, "disk.free."):
 			// 磁盘空闲
 			frontendName = "disk_free"
 			// 将字节转换为GB
-			metric.Value = metric.Value / (1024 * 1024 * 1024)
-			metric.Unit = "GB"
+			convertedValue = metric.Value / (1024 * 1024 * 1024)
+			convertedUnit = "GB"
 		default:
 			// 对于其他指标，保持原名称
 			frontendName = metric.Name
+			convertedValue = metric.Value
+			convertedUnit = metric.Unit
 		}
 
 		convertedMetrics = append(convertedMetrics, map[string]interface{}{
 			"name":  frontendName,
-			"value": metric.Value,
-			"unit":  metric.Unit,
+			"value": convertedValue,
+			"unit":  convertedUnit,
 		})
 	}
 

@@ -17,7 +17,7 @@ type Analyzer struct {
 	cacheMutex   sync.RWMutex
 	aggregators  map[string]Aggregator
 	alertRules   map[string]*AlertRule
-	topkAnalyzer *TopKAnalyzer
+	topkAnalyzer *StreamingTopKAnalyzer // 使用新的流式Top-K分析器
 }
 
 // Aggregator 聚合器接口
@@ -95,7 +95,7 @@ func NewAnalyzer() *Analyzer {
 		dataCache:   make(map[string][]*models.MetricsData),
 		aggregators: make(map[string]Aggregator),
 		alertRules:  make(map[string]*AlertRule),
-		topkAnalyzer: NewTopKAnalyzer(),
+		topkAnalyzer: NewStreamingTopKAnalyzer(),
 	}
 
 	// 注册默认聚合器
