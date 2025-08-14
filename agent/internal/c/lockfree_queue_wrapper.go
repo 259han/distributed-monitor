@@ -61,7 +61,7 @@ func (lq *LockFreeQueue) Enqueue(data unsafe.Pointer) error {
 	item.fd = 0  // 这里我们只是存储数据指针
 	item.data = data
 
-	result := C.lfq_enqueue(lq.ptr, &item)
+	result := C.lfq_enqueue_conn(lq.ptr, &item)
 	if result != 0 {
 		return ErrQueueFull
 	}
@@ -121,7 +121,10 @@ func (lq *LockFreeQueue) Close() {
 		return
 	}
 
-	C.lfq_destroy(lq.ptr)
-	lq.ptr = nil
+	if lq.ptr != nil {
+		C.lfq_destroy(lq.ptr)
+		C.free(unsafe.Pointer(lq.ptr))
+		lq.ptr = nil
+	}
 	lq.closed = true
 }

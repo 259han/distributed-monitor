@@ -1,5 +1,24 @@
 #include "lockfree_queue.h"
 #include <string.h>
+#include <stdlib.h>
+
+lockfree_queue_t* lfq_create(size_t capacity) {
+    if (capacity == 0 || capacity > LFQ_MAX_CONNECTIONS) {
+        return NULL;
+    }
+    
+    lockfree_queue_t* queue = (lockfree_queue_t*)malloc(sizeof(lockfree_queue_t));
+    if (queue == NULL) {
+        return NULL;
+    }
+    
+    if (lfq_init(queue, capacity) != 0) {
+        free(queue);
+        return NULL;
+    }
+    
+    return queue;
+}
 
 int lfq_init(lockfree_queue_t* queue, size_t capacity) {
     if (queue == NULL || capacity == 0 || capacity > LFQ_MAX_CONNECTIONS) {
@@ -32,7 +51,7 @@ void lfq_destroy(lockfree_queue_t* queue) {
     
     while (head != tail) {
         if (queue->connections[head].data != NULL) {
-            free(queue->connections[head].data);
+            // 注意：这里不应该free data，因为data的内存管理由Go负责
             queue->connections[head].data = NULL;
         }
         head = (head + 1) % queue->capacity;
@@ -42,6 +61,9 @@ void lfq_destroy(lockfree_queue_t* queue) {
     queue->capacity = 0;
     atomic_store(&queue->head, 0);
     atomic_store(&queue->tail, 0);
+    
+    // 如果queue是通过lfq_create创建的，需要释放queue本身
+    // 但这里无法确定，所以需要调用者明确调用free
 }
 
 int lfq_enqueue(lockfree_queue_t* queue, int fd, void* data) {
@@ -74,6 +96,14 @@ int lfq_enqueue(lockfree_queue_t* queue, int fd, void* data) {
         }
         // CAS失败，重试
     } while (1);
+}
+
+int lfq_enqueue_conn(lockfree_queue_t* queue, lfq_connection_t* conn) {
+    if (queue == NULL || atomic_load(&queue->initialized) == 0 || conn == NULL) {
+        return -1;
+    }
+    
+    return lfq_enqueue(queue, conn->fd, conn->data);
 }
 
 int lfq_dequeue(lockfree_queue_t* queue, lfq_connection_t* conn) {

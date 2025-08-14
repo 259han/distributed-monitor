@@ -23,14 +23,20 @@ typedef struct {
     atomic_int initialized;      // Flag to indicate if queue is initialized
 } lockfree_queue_t;
 
+// Create a new lock-free queue
+lockfree_queue_t* lfq_create(size_t capacity);
+
 // Initialize the lock-free queue
 int lfq_init(lockfree_queue_t* queue, size_t capacity);
 
 // Destroy the lock-free queue
 void lfq_destroy(lockfree_queue_t* queue);
 
-// Enqueue a new connection
+// Enqueue a new connection (original version)
 int lfq_enqueue(lockfree_queue_t* queue, int fd, void* data);
+
+// Enqueue a connection struct (for Go wrapper)
+int lfq_enqueue_conn(lockfree_queue_t* queue, lfq_connection_t* conn);
 
 // Dequeue a connection
 int lfq_dequeue(lockfree_queue_t* queue, lfq_connection_t* conn);
