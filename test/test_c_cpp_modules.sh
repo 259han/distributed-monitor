@@ -51,14 +51,14 @@ compile_c_modules() {
     fi
     echo -e "${GREEN}✓ epoll服务器编译成功${NC}"
     
-    # 编译ring buffer
-    echo -e "${YELLOW}编译ring buffer测试...${NC}"
-    gcc -Wall -Wextra -O2 -pthread -o bin/c/ring_buffer_test agent/internal/c/ring_buffer.c agent/internal/c/ring_buffer_test.c -DCOMPILE_TEST
+    # 编译无锁队列
+    echo -e "${YELLOW}编译无锁队列共享库...${NC}"
+    gcc -shared -fPIC -Wall -Wextra -O2 -pthread -o bin/lib/liblockfreequeue.so agent/internal/c/lockfree_queue.c
     if [ $? -ne 0 ]; then
-        echo -e "${RED}✗ ring buffer编译失败${NC}"
+        echo -e "${RED}✗ 无锁队列编译失败${NC}"
         return 1
     fi
-    echo -e "${GREEN}✓ ring buffer编译成功${NC}"
+    echo -e "${GREEN}✓ 无锁队列编译成功${NC}"
     
         
     return 0
@@ -84,28 +84,28 @@ compile_cpp_modules() {
     return 0
 }
 
-# 测试ring buffer
-test_ring_buffer() {
-    echo -e "${YELLOW}测试ring buffer...${NC}"
+# 测试无锁队列
+test_lockfree_queue() {
+    echo -e "${YELLOW}测试无锁队列...${NC}"
     
-    # 创建简单的ring buffer测试程序
-    cat > /tmp/ring_buffer_test.c << 'EOF'
-#include "agent/internal/c/ring_buffer.h"
+    # 创建简单的无锁队列测试程序
+    cat > /tmp/lockfree_queue_test.c << 'EOF'
+#include "agent/internal/c/lockfree_queue.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
 int main() {
-    printf("开始ring buffer测试...\n");
+    printf("开始无锁队列测试...\n");
     
-    // 创建ring buffer
-    ring_buffer_t *rb = ring_buffer_create(1024, 1);
-    if (!rb) {
-        printf("✗ 创建ring buffer失败\n");
+    // 创建无锁队列
+    lockfree_queue_t *lq = lfq_create(1024);
+    if (!lq) {
+        printf("✗ 创建无锁队列失败\n");
         return 1;
     }
-    printf("✓ 创建ring buffer成功\n");
+    printf("✓ 创建无锁队列成功\n");
     
     // 测试基本操作
     char *test_data[10];
@@ -116,7 +116,11 @@ int main() {
     
     // 添加数据
     for (int i = 0; i < 5; i++) {
-        if (ring_buffer_push(rb, test_data[i]) == 0) {
+        lfq_connection_t item;
+        item.fd = i;
+        item.data = test_data[i];
+        
+        if (lfq_enqueue(lq, &item) == 0) {
             printf("✓ 添加数据%d成功\n", i);
         } else {
             printf("✗ 添加数据%d失败\n", i);
@@ -124,65 +128,50 @@ int main() {
     }
     
     // 获取数据
-    void *data;
+    lfq_connection_t item;
     for (int i = 0; i < 5; i++) {
-        if (ring_buffer_pop(rb, &data) == 0) {
-            printf("✓ 获取数据: %s\n", (char*)data);
-            free(data);
+        if (lfq_dequeue(lq, &item) == 0) {
+            printf("✓ 获取数据: %s (fd: %d)\n", (char*)item.data, item.fd);
+            free(item.data);
         } else {
             printf("✗ 获取数据失败\n");
         }
     }
     
-    // 测试批量操作
-    char *batch_data[3];
-    for (int i = 0; i < 3; i++) {
-        batch_data[i] = malloc(32);
-        sprintf(batch_data[i], "批量数据%d", i);
-    }
+    // 测试队列状态
+    printf("队列大小: %zu\n", lfq_size(lq));
+    printf("队列是否为空: %s\n", lfq_is_empty(lq) ? "是" : "否");
     
-    if (ring_buffer_push_batch(rb, (void**)batch_data, 3) == 0) {
-        printf("✓ 批量添加成功\n");
-    } else {
-        printf("✗ 批量添加失败\n");
-    }
-    
-    // 清理：先清空ring buffer中的所有数据（包括批量添加的数据）
-    void *remaining_data;
-    while (ring_buffer_try_pop(rb, &remaining_data) == 0) {
-        free(remaining_data);
-    }
-    
-    // 然后销毁ring buffer
-    ring_buffer_destroy(rb);
+    // 销毁队列
+    lfq_destroy(lq);
     
     // 释放未使用的数据
     for (int i = 5; i < 10; i++) {
         free(test_data[i]);
     }
     
-    printf("✓ ring buffer测试完成\n");
+    printf("✓ 无锁队列测试完成\n");
     return 0;
 }
 EOF
 
     # 编译并运行测试
-    gcc -I. -Wall -Wextra -O2 -pthread -o /tmp/ring_buffer_test /tmp/ring_buffer_test.c \
-        agent/internal/c/ring_buffer.c
+    gcc -I. -Wall -Wextra -O2 -pthread -o /tmp/lockfree_queue_test /tmp/lockfree_queue_test.c \
+        agent/internal/c/lockfree_queue.c
     if [ $? -ne 0 ]; then
-        echo -e "${RED}✗ ring buffer测试编译失败${NC}"
+        echo -e "${RED}✗ 无锁队列测试编译失败${NC}"
         return 1
     fi
     
-    /tmp/ring_buffer_test
+    /tmp/lockfree_queue_test
     if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓ ring buffer测试通过${NC}"
+        echo -e "${GREEN}✓ 无锁队列测试通过${NC}"
     else
-        echo -e "${RED}✗ ring buffer测试失败${NC}"
+        echo -e "${RED}✗ 无锁队列测试失败${NC}"
         return 1
     fi
     
-    rm -f /tmp/ring_buffer_test /tmp/ring_buffer_test.c
+    rm -f /tmp/lockfree_queue_test /tmp/lockfree_queue_test.c
     return 0
 }
 
@@ -440,7 +429,7 @@ main() {
     fi
     
     # 运行测试
-    test_ring_buffer
+    test_lockfree_queue
     test_epoll_server
         test_topk_module
     

@@ -105,10 +105,4 @@ dump.rdb
 # Raft data
 data/raft/
 
-# 其他
-read.md
-技术选型与使用说明.md
-系统架构与数据流详解.md
-系统架构设计文档.md
-技术面试详细文档.md
-PROJECT_FUNCTION_GUIDE.md
+

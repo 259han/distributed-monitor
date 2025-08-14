@@ -17,6 +17,9 @@
 #include <signal.h>
 #include <time.h>
 
+// Include lock-free queue for connection management
+#include "lockfree_queue.h"
+
 // 服务器配置
 #define MAX_EVENTS 1024
 #define MAX_CONNECTIONS 10000
@@ -111,6 +114,9 @@ typedef struct {
     // 心跳检测
     pthread_t heartbeat_thread;
     int heartbeat_enabled;
+    
+    // 无锁队列用于连接管理
+    lockfree_queue_t connection_queue;
 } epoll_server_t;
 
 // 事件类型

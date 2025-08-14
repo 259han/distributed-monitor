@@ -12,7 +12,7 @@ proto:
 build-agent: proto build-c
 	@echo "构建数据采集代理..."
 	@mkdir -p bin
-	@export LD_LIBRARY_PATH=./bin/lib:$$LD_LIBRARY_PATH && go build -buildvcs=false -tags cgo -ldflags "-extldflags '-L./bin/lib -lringbuffer'" -o bin/agent ./agent/cmd
+	@export LD_LIBRARY_PATH=./bin/lib:$$LD_LIBRARY_PATH && go build -buildvcs=false -tags cgo -ldflags "-extldflags '-L./bin/lib -llockfreequeue'" -o bin/agent ./agent/cmd
 
 build-agent-integrated: proto build-c
 	@echo "构建集成版数据采集代理..."
@@ -53,11 +53,9 @@ build-c:
 	@echo "构建C语言模块..."
 	@mkdir -p bin/c bin/lib
 	@echo "编译epoll服务器..."
-	@gcc -Wall -Wextra -O2 -pthread -DCOMPILE_STANDALONE -o bin/c/epoll_server ./agent/internal/c/epoll_server.c ./agent/internal/c/epoll_main.c
-	@echo "编译ring buffer测试..."
-	@gcc -Wall -Wextra -O2 -pthread -DCOMPILE_TEST -o bin/c/ring_buffer_test ./agent/internal/c/ring_buffer.c ./agent/internal/c/ring_buffer_test.c
-	@echo "编译C ring buffer共享库..."
-	@gcc -shared -fPIC -Wall -Wextra -O2 -pthread -o bin/lib/libringbuffer.so ./agent/internal/c/ring_buffer.c
+	@gcc -Wall -Wextra -O2 -pthread -DCOMPILE_STANDALONE -o bin/c/epoll_server ./agent/internal/c/epoll_server.c ./agent/internal/c/epoll_main.c ./agent/internal/c/lockfree_queue.c
+	@echo "编译无锁队列共享库..."
+	@gcc -shared -fPIC -Wall -Wextra -O2 -pthread -o bin/lib/liblockfreequeue.so ./agent/internal/c/lockfree_queue.c
 	
 build-cpp:
 	@echo "构建C++模块..."

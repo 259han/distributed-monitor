@@ -3,7 +3,7 @@ package collector
 /*
 #cgo CFLAGS: -I../c
 #cgo LDFLAGS: -lpthread
-#include "ring_buffer.h"
+#include "lockfree_queue.h"
 #include <stdlib.h>
 #include <string.h>
 */
@@ -34,13 +34,13 @@ type Collector interface {
 type MetricsCollector struct {
 	config         *config.Config
 	collectors     map[string]Collector
-	metricsBuffer  *c.SimpleMetricsRingBuffer
+	metricsBuffer  *c.LockFreeQueue
 	wg             sync.WaitGroup
 	mu             sync.Mutex
 	stopCh         chan struct{}
 	hostInfo       models.HostInfo
 	grpcClient     *service.GRPCClient
-	useCRingBuffer bool // 是否使用C ring buffer
+	useLockFreeQueue bool // 是否使用无锁队列
 }
 
 // NewMetricsCollector 创建新的指标采集器
@@ -54,16 +54,16 @@ func NewMetricsCollector(cfg *config.Config) *MetricsCollector {
 			Hostname: cfg.Agent.Hostname,
 			IP:       cfg.Agent.IP,
 		},
-		grpcClient:     service.NewGRPCClient(cfg),
-		useCRingBuffer: true, // 默认使用C ring buffer
+		grpcClient:       service.NewGRPCClient(cfg),
+		useLockFreeQueue: true, // 默认使用无锁队列
 	}
 
-	// 初始化C ring buffer
-	mc.metricsBuffer = c.NewSimpleMetricsRingBuffer(cfg.Advanced.RingBufferSize, true)
+	// 初始化无锁队列
+	mc.metricsBuffer = c.NewLockFreeQueue(cfg.Advanced.RingBufferSize)
 	if mc.metricsBuffer == nil {
-		// 如果C ring buffer创建失败，回退到Go channel
-		mc.useCRingBuffer = false
-		log.Printf("警告：C ring buffer创建失败，回退到Go channel")
+		// 如果无锁队列创建失败，回退到Go channel
+		mc.useLockFreeQueue = false
+		log.Printf("警告：无锁队列创建失败，回退到Go channel")
 	}
 
 	return mc
@@ -117,8 +117,8 @@ func (mc *MetricsCollector) Stop() error {
 		return err
 	}
 
-	// 关闭C ring buffer
-	if mc.useCRingBuffer && mc.metricsBuffer != nil {
+	// 关闭无锁队列
+	if mc.useLockFreeQueue && mc.metricsBuffer != nil {
 		mc.metricsBuffer.Close()
 	}
 
@@ -176,10 +176,10 @@ func (mc *MetricsCollector) collectMetrics() {
 	log.Printf("采集到 %d 个指标，主机ID: %s", len(allMetrics), mc.hostInfo.ID)
 
 	// 发送到buffer
-	if mc.useCRingBuffer {
-		// 使用C ring buffer处理数据
-		if err := mc.sendToCRingBuffer(metricsData); err != nil {
-			log.Printf("发送到C ring buffer失败: %v", err)
+	if mc.useLockFreeQueue {
+		// 使用无锁队列处理数据
+		if err := mc.sendToLockFreeQueue(metricsData); err != nil {
+			log.Printf("发送到无锁队列失败: %v", err)
 			// 回退到直接处理
 			mc.processBatchDirectly(metricsData)
 		}
@@ -203,9 +203,9 @@ func (mc *MetricsCollector) processLoop(ctx context.Context) {
 		case <-mc.stopCh:
 			return
 		case <-ticker.C:
-			// 从C ring buffer中处理数据
-			if mc.useCRingBuffer {
-				mc.processFromCRingBuffer()
+			// 从无锁队列中处理数据
+			if mc.useLockFreeQueue {
+				mc.processFromLockFreeQueue()
 			}
 		}
 	}
@@ -233,10 +233,10 @@ func (mc *MetricsCollector) processBatchDirectly(data models.MetricsData) {
 	}
 }
 
-// sendToCRingBuffer 发送数据到C ring buffer
-func (mc *MetricsCollector) sendToCRingBuffer(data models.MetricsData) error {
+// sendToLockFreeQueue 发送数据到无锁队列
+func (mc *MetricsCollector) sendToLockFreeQueue(data models.MetricsData) error {
 	if mc.metricsBuffer == nil {
-		return fmt.Errorf("c ring buffer未初始化")
+		return fmt.Errorf("无锁队列未初始化")
 	}
 
 	// 将Go结构转换为C结构
@@ -245,19 +245,19 @@ func (mc *MetricsCollector) sendToCRingBuffer(data models.MetricsData) error {
 		return fmt.Errorf("转换数据失败: %v", err)
 	}
 
-	// 发送到C ring buffer
-	if err := mc.metricsBuffer.PushData(unsafe.Pointer(cData)); err != nil {
+	// 发送到无锁队列
+	if err := mc.metricsBuffer.Enqueue(unsafe.Pointer(cData)); err != nil {
 		// 释放内存
 		C.free(unsafe.Pointer(cData.metrics))
 		C.free(unsafe.Pointer(cData))
-		return fmt.Errorf("发送到C ring buffer失败: %v", err)
+		return fmt.Errorf("推送数据到无锁队列失败: %v", err)
 	}
 
 	return nil
 }
 
-// processFromCRingBuffer 从C ring buffer处理数据
-func (mc *MetricsCollector) processFromCRingBuffer() {
+// processFromLockFreeQueue 从无锁队列处理数据
+func (mc *MetricsCollector) processFromLockFreeQueue() {
 	if mc.metricsBuffer == nil {
 		return
 	}
@@ -267,12 +267,12 @@ func (mc *MetricsCollector) processFromCRingBuffer() {
 	var batch []models.MetricsData
 
 	for i := 0; i < batchSize; i++ {
-		dataPtr, err := mc.metricsBuffer.TryPopData()
+		dataPtr, err := mc.metricsBuffer.Dequeue()
 		if err != nil {
-			if err == c.ErrBufferEmpty {
+			if err == c.ErrQueueEmpty {
 				break
 			}
-			log.Printf("从C ring buffer获取数据失败: %v", err)
+			log.Printf("从无锁队列获取数据失败: %v", err)
 			continue
 		}
 

@@ -37,6 +37,7 @@ static void* heartbeat_thread(void *arg);
 static void handle_new_connection(epoll_server_t *server);
 static void handle_client_data(epoll_server_t *server, int fd);
 static void handle_client_disconnect(epoll_server_t *server, int fd);
+static int initialize_client_connection(epoll_server_t *server, int client_fd, struct sockaddr_in *addr_ptr);
 static void update_connection_stats(epoll_server_t *server, int fd, int bytes_sent, int bytes_received);
 static void log_message(int level, const char *format, ...);
 static const char* get_error_string(int error_code);
@@ -75,9 +76,16 @@ epoll_server_t* epoll_server_create_with_config(int port, int max_connections, i
     server->max_buffer_size = BUFFER_SIZE;
     server->heartbeat_enabled = 0;
 
+    // 初始化无锁队列
+    if (lfq_init(&server->connection_queue, max_connections) != 0) {
+        free(server);
+        return NULL;
+    }
+
     // 分配连接数组
     server->connections = (connection_t*)malloc(sizeof(connection_t) * max_connections);
     if (!server->connections) {
+        lfq_destroy(&server->connection_queue);
         free(server);
         return NULL;
     }
@@ -93,6 +101,7 @@ epoll_server_t* epoll_server_create_with_config(int port, int max_connections, i
     server->thread_pool = (pthread_t*)malloc(sizeof(pthread_t) * thread_count);
     if (!server->thread_pool) {
         free(server->connections);
+        lfq_destroy(&server->connection_queue);
         free(server);
         return NULL;
     }
@@ -102,6 +111,7 @@ epoll_server_t* epoll_server_create_with_config(int port, int max_connections, i
     if (server->server_fd == -1) {
         free(server->thread_pool);
         free(server->connections);
+        lfq_destroy(&server->connection_queue);
         free(server);
         return NULL;
     }
@@ -111,6 +121,7 @@ epoll_server_t* epoll_server_create_with_config(int port, int max_connections, i
         close(server->server_fd);
         free(server->thread_pool);
         free(server->connections);
+        lfq_destroy(&server->connection_queue);
         free(server);
         return NULL;
     }
@@ -126,6 +137,7 @@ epoll_server_t* epoll_server_create_with_config(int port, int max_connections, i
         close(server->server_fd);
         free(server->thread_pool);
         free(server->connections);
+        lfq_destroy(&server->connection_queue);
         free(server);
         return NULL;
     }
@@ -135,6 +147,7 @@ epoll_server_t* epoll_server_create_with_config(int port, int max_connections, i
         close(server->server_fd);
         free(server->thread_pool);
         free(server->connections);
+        lfq_destroy(&server->connection_queue);
         free(server);
         return NULL;
     }
@@ -145,6 +158,7 @@ epoll_server_t* epoll_server_create_with_config(int port, int max_connections, i
         close(server->server_fd);
         free(server->thread_pool);
         free(server->connections);
+        lfq_destroy(&server->connection_queue);
         free(server);
         return NULL;
     }
@@ -158,6 +172,7 @@ epoll_server_t* epoll_server_create_with_config(int port, int max_connections, i
         close(server->server_fd);
         free(server->thread_pool);
         free(server->connections);
+        lfq_destroy(&server->connection_queue);
         free(server);
         return NULL;
     }
@@ -240,6 +255,7 @@ void epoll_server_destroy(epoll_server_t *server) {
     pthread_mutex_destroy(&server->stats_mutex);
     free(server->connections);
     free(server->thread_pool);
+    lfq_destroy(&server->connection_queue);
     free(server);
     
     g_server = NULL;
@@ -459,6 +475,28 @@ static void* worker_thread(void *arg) {
     log_message(2, "Worker thread started, tid: %d", tid);
 
     while (server->running) {
+        // 初始化新连接（从无锁队列中取出并完成设置）
+        lfq_connection_t new_conn;
+        while (lfq_dequeue(&server->connection_queue, &new_conn) == 0) {
+            int client_fd = new_conn.fd;
+            struct sockaddr_in *addr_ptr = (struct sockaddr_in*)new_conn.data;
+
+            if (!addr_ptr) {
+                log_message(1, "Dequeued connection without address data for fd %d", client_fd);
+                close(client_fd);
+                continue;
+            }
+
+            // 使用辅助函数完成连接初始化
+            if (initialize_client_connection(server, client_fd, addr_ptr) != 0) {
+                log_message(1, "Failed to initialize connection for fd %d", client_fd);
+                close(client_fd);
+            }
+            
+            // 释放地址副本
+            free(addr_ptr);
+        }
+
         int nfds = epoll_wait(server->epoll_fd, events, MAX_EVENTS, 100);
         if (nfds == -1) {
             if (errno == EINTR) {
@@ -519,83 +557,36 @@ static void* heartbeat_thread(void *arg) {
 }
 
 static void handle_new_connection(epoll_server_t *server) {
-    struct sockaddr_in client_addr;
-    socklen_t client_len = sizeof(client_addr);
-    int client_fd = accept(server->server_fd, (struct sockaddr*)&client_addr, &client_len);
-    
-    if (client_fd == -1) {
-        if (errno != EAGAIN && errno != EWOULDBLOCK) {
+    while (1) {
+        struct sockaddr_in client_addr;
+        socklen_t client_len = sizeof(client_addr);
+        int client_fd = accept(server->server_fd, (struct sockaddr*)&client_addr, &client_len);
+
+        if (client_fd == -1) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // Edge-triggered: all incoming connections accepted
+                break;
+            }
             log_message(1, "Accept error: %s", strerror(errno));
-        }
-        return;
-    }
-    
-    // 查找空闲连接槽位
-    int conn_index = -1;
-    for (int i = 0; i < server->max_connections; i++) {
-        if (server->connections[i].fd == -1) {
-            conn_index = i;
             break;
         }
-    }
-    
-    if (conn_index == -1) {
-        log_message(1, "Connection limit reached, rejecting connection from %s:%d", 
-                   inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
-        close(client_fd);
-        return;
-    }
 
-    if (set_nonblocking(client_fd) == -1) {
-        log_message(1, "Failed to set nonblocking for fd %d", client_fd);
-        close(client_fd);
-        return;
-    }
-    
-    // 设置socket选项
-    if (set_socket_options(client_fd, server) != 0) {
-        log_message(1, "Failed to set socket options for fd %d", client_fd);
-        close(client_fd);
-        return;
-    }
+        // 复制客户端地址，避免入队栈指针
+        struct sockaddr_in *addr_copy = (struct sockaddr_in*)malloc(sizeof(struct sockaddr_in));
+        if (!addr_copy) {
+            log_message(1, "Memory allocation failed for client address, closing fd %d", client_fd);
+            close(client_fd);
+            continue;
+        }
+        *addr_copy = client_addr;
 
-    // 添加到epoll
-    struct epoll_event ev;
-    ev.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
-    ev.data.fd = client_fd;
-    if (epoll_ctl(server->epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) == -1) {
-        log_message(1, "Failed to add fd %d to epoll", client_fd);
-        close(client_fd);
-        return;
-    }
-
-    // 保存连接信息
-    connection_t *conn = &server->connections[conn_index];
-    conn->fd = client_fd;
-    conn->addr = client_addr;
-    conn->buffer_len = 0;
-    conn->state = CONNECTION_STATE_CONNECTED;
-    conn->connect_time = time(NULL);
-    conn->last_activity = conn->connect_time;
-    conn->bytes_sent = 0;
-    conn->bytes_received = 0;
-    conn->messages_sent = 0;
-    conn->messages_received = 0;
-    conn->client_port = ntohs(client_addr.sin_port);
-    strncpy(conn->client_ip, inet_ntoa(client_addr.sin_addr), INET_ADDRSTRLEN - 1);
-    conn->client_ip[INET_ADDRSTRLEN - 1] = '\0';
-    
-    // 更新统计信息
-    pthread_mutex_lock(&server->stats_mutex);
-    server->stats.total_connections++;
-    server->stats.active_connections++;
-    pthread_mutex_unlock(&server->stats_mutex);
-    
-    log_message(2, "New connection from %s:%d (fd: %d)", conn->client_ip, conn->client_port, client_fd);
-    
-    // 调用连接回调
-    if (g_connection_callback) {
-        g_connection_callback(client_fd, 1, g_user_data);
+        // 入队等待工作线程完成初始化
+        if (lfq_enqueue(&server->connection_queue, client_fd, addr_copy) != 0) {
+            log_message(1, "Connection queue full or limit reached, rejecting fd %d", client_fd);
+            close(client_fd);
+            free(addr_copy);
+            continue;
+        }
     }
 }
 
@@ -957,6 +948,73 @@ int epoll_server_get_thread_count(epoll_server_t *server) {
     }
     
     return server->thread_count;
+}
+
+// 连接初始化辅助函数
+static int initialize_client_connection(epoll_server_t *server, int client_fd, struct sockaddr_in *addr_ptr) {
+    // 设置为非阻塞
+    if (set_nonblocking(client_fd) == -1) {
+        log_message(1, "Failed to set nonblocking for fd %d", client_fd);
+        return -1;
+    }
+
+    // 设置socket选项
+    if (set_socket_options(client_fd, server) != 0) {
+        log_message(1, "Failed to set socket options for fd %d", client_fd);
+        return -1;
+    }
+
+    // 添加到epoll
+    struct epoll_event ev;
+    ev.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+    ev.data.fd = client_fd;
+    if (epoll_ctl(server->epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) == -1) {
+        log_message(1, "Failed to add fd %d to epoll", client_fd);
+        return -1;
+    }
+
+    // 保存连接信息
+    connection_t *conn = NULL;
+    for (int i = 0; i < server->max_connections; i++) {
+        if (server->connections[i].fd == -1) {
+            conn = &server->connections[i];
+            conn->fd = client_fd;
+            conn->addr = *addr_ptr;
+            conn->buffer_len = 0;
+            conn->state = CONNECTION_STATE_CONNECTED;
+            conn->connect_time = time(NULL);
+            conn->last_activity = conn->connect_time;
+            conn->bytes_sent = 0;
+            conn->bytes_received = 0;
+            conn->messages_sent = 0;
+            conn->messages_received = 0;
+            conn->client_port = ntohs(addr_ptr->sin_port);
+            strncpy(conn->client_ip, inet_ntoa(addr_ptr->sin_addr), INET_ADDRSTRLEN - 1);
+            conn->client_ip[INET_ADDRSTRLEN - 1] = '\0';
+            break;
+        }
+    }
+
+    if (!conn) {
+        log_message(1, "No available connection slot for fd %d", client_fd);
+        epoll_ctl(server->epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
+        return -1;
+    }
+
+    // 更新统计信息
+    pthread_mutex_lock(&server->stats_mutex);
+    server->stats.total_connections++;
+    server->stats.active_connections++;
+    pthread_mutex_unlock(&server->stats_mutex);
+
+    log_message(2, "Initialized new connection (fd: %d)", client_fd);
+
+    // 调用连接回调
+    if (g_connection_callback) {
+        g_connection_callback(client_fd, 1, g_user_data);
+    }
+
+    return 0;
 }
 
 // 日志记录函数

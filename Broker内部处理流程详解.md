@@ -153,8 +153,8 @@ HashRing    Nodes    Virtual    Mapping    HashRing
 真实节点 → 生成虚拟节点 → 计算哈希值 → 添加到环 → 建立映射
     │         │           │         │       │
     ▼         ▼           ▼         ▼       ▼
-broker-1    50个虚拟节点    CRC32哈希   排序插入    虚拟→真实
-          (1,2,3...50)   (计算)     (有序环)    (映射表)
+broker-1    动态数量虚拟节点    CRC32哈希   排序插入    虚拟→真实
+          (根据配置)   (计算)     (有序环)    (映射表)
 ```
 
 #### **主机管理组件初始化**
@@ -289,14 +289,24 @@ gRPC流接收 → 解析Protocol Buffers → 验证数据格式 → 提取Metric
 
 ### 2. **一致性哈希分片流程**
 
+#### **时间戳处理策略**
+```
+Agent采集周期: 5秒固定间隔 → Unix秒级时间戳 → 相同秒内数据路由一致
+    │                    │                    │
+    ▼                    ▼                    ▼
+时间点1: 1640995200     时间点2: 1640995205   时间点3: 1640995210
+所有host数据 →          所有host数据 →        所有host数据 →
+固定分片结果            固定分片结果          固定分片结果
+```
+
 #### **分片键计算流程**
 ```
 接收MetricsData → 提取hostID和timestamp → 构造分片键 → CRC32哈希计算 → 哈希值
     │                │                    │              │              │
     ▼                ▼                    ▼              ▼              ▼
 {host-1,        host-1:1640995200    "host-1:1640995200"    哈希函数    0x8A3B2C1D
- timestamp,     (字符串拼接)         (分片键格式)          (CRC32)    (32位整数)
- metrics}
+ timestamp,     (Unix秒级时间戳)      (分片键格式)          (CRC32)    (32位整数)
+ metrics}       固定5秒间隔采集       同秒内数据相同键
 ```
 
 #### **哈希环节点定位流程**
@@ -325,7 +335,7 @@ Agent-1 → Broker-1 → 计算哈希 → 目标是自己？ → 直接存储 �
     │         │         │         │              │           │
     ▼         ▼         ▼         ▼              ▼           ▼
 host-1数据  接收数据   0x8A3B2C1D  是 → 本地Redis   成功存储    ACK
-          (gRPC)     (哈希值)    否 → 转发数据
+          (gRPC)     (CRC32)     否 → 转发数据
 ```
 
 #### **跨节点转发场景**
@@ -334,7 +344,7 @@ Agent-1 → Broker-1 → 计算哈希 → 目标是Broker-2 → 转发数据 →
     │         │         │         │              │           │           │
     ▼         ▼         ▼         ▼              ▼           ▼           ▼
 host-1数据  接收数据   0x8A3B2C1D  0x8A3B2C1D    内部gRPC    本地Redis   存储成功    ACK
-          (gRPC)     (哈希值)    ∈[broker-2区间]  转发       存储       确认
+          (gRPC)     (CRC32)     ∈[broker-2区间]  转发       存储       确认
 ```
 
 #### **批量处理优化流程**
@@ -467,7 +477,7 @@ EnableCluster  ["redis-1:6379",   Cluster Client   自动发现    连接池
     │           │           │           │           │
     ▼           ▼           ▼           ▼           ▼
 MetricsData   monitor:metrics:   monitor:index:   monitor:hosts:   Pipeline
-          host-1:1640995200   metrics:host-1   host-1        批量操作
+          hostID:timestamp   metrics:hostID   hostID        批量操作
           (数据存储)         (时间索引)       (主机信息)
 ```
 
