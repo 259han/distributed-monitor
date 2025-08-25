@@ -1,192 +1,196 @@
-# 分布式系统监控平台
+# Distributed System Monitoring Platform
 
-一个基于 Go 语言开发的高性能分布式系统监控平台，支持实时指标采集、存储、分析和可视化。
+[English](README.md) | [中文版本](README_zh.md)
 
-## 🚀 项目特性
+A high-performance distributed system monitoring platform built with Go, supporting real-time metrics collection, storage, analysis, and visualization.
 
-### 核心功能
-- **实时监控**: 采集 CPU、内存、网络、磁盘等系统指标
-- **分布式架构**: Agent-Broker-Visualization 三层架构，支持水平扩展
-- **高性能存储**: 基于 Redis 的时序数据存储，支持 TTL 和自动过期
-- **实时推送**: WebSocket/QUIC 实时数据推送到前端
-- **高可用**: Raft 共识算法保证集群一致性和故障恢复
+## 🚀 Features
 
-### 技术亮点
-- **高性能组件**: C/C++ 实现的 Ring Buffer 和 Top-K 算法
-- **智能分片**: 一致性哈希算法实现数据分片和负载均衡
-- **多协议支持**: gRPC、WebSocket、QUIC 多种通信协议
-- **模块化设计**: 清晰的包结构，便于扩展和维护
+### Core Functions
+- **Real-time Monitoring**: Collect CPU, memory, network, disk and other system metrics
+- **Distributed Architecture**: Agent-Broker-Visualization three-tier architecture with horizontal scaling
+- **High-performance Storage**: Redis-based time-series data storage with TTL and auto-expiration
+- **Real-time Push**: WebSocket/QUIC real-time data push to frontend
+- **High Availability**: Raft consensus algorithm ensures cluster consistency and fault recovery
 
-## 📋 系统要求
+### Technical Highlights
+- **Hybrid Architecture**: Go+C/C++ hybrid design, C-layer lock-free queue, C++ streaming Top-K algorithm
+- **True Lock-free Queue**: C-layer CAS atomic operations, removed Go-layer mutex, Ring Buffer 2000 entries
+- **Smart Sharding**: Consistent hashing algorithm for data sharding and load balancing
+- **Multi-protocol Support**: gRPC(9093), WebSocket, QUIC(8081) multiple communication protocols
 
-- **Go**: 1.19 或更高版本
-- **Redis**: 6.0 或更高版本
-- **系统**: Linux/macOS (推荐 Linux)
-- **编译器**: GCC (用于 C/C++ 组件)
+## 📋 System Requirements
 
-## 🛠️ 安装部署
+- **Go**: 1.19 or higher
+- **Redis**: 6.0 or higher
+- **System**: Linux/macOS (Linux recommended)
+- **Compiler**: GCC (for C/C++ components)
 
-### 1. 克隆项目
+## 🛠️ Installation and Deployment
+
+### 1. Clone Project
 
 ```bash
 git clone https://github.com/your-username/monitor.git
 cd monitor
 ```
 
-### 2. 安装依赖
+### 2. Install Dependencies
 
 ```bash
-# 安装 Go 依赖
+# Install Go dependencies
 go mod tidy
 
-# 安装 Redis (Ubuntu/Debian)
+# Install Redis (Ubuntu/Debian)
 sudo apt-get install redis-server
 
-# 或者使用 Docker
+# Or use Docker
 docker run -d -p 6379:6379 redis:6.2-alpine
 ```
 
-### 3. 编译项目
+### 3. Build Project
 
 ```bash
-# 编译所有组件 (包括C/C++模块)
+# Build all components (including C/C++ modules)
 make all
 
-# 或者仅编译Go组件
+# Or build Go components only
 make build
 
-# 单独编译各组件
-make build-agent    # 编译Agent
-make build-broker   # 编译Broker
-make build-viz      # 编译Visualization
+# Build individual components
+make build-agent    # Build Agent
+make build-broker   # Build Broker
+make build-viz      # Build Visualization
 
-# 编译C/C++模块
-make build-c        # 编译Ring Buffer等C模块
-make build-cpp      # 编译Top-K等C++模块
+# Build C/C++ modules
+make build-c        # Build Ring Buffer and other C modules
+make build-cpp      # Build Top-K and other C++ modules
 ```
 
-### 4. 配置文件
+### 4. Configuration Files
 
-项目已包含默认配置文件，可直接使用或根据需要修改：
+The project includes default configuration files that can be used directly or modified as needed:
 
 ```bash
-# 查看配置文件
+# View configuration files
 ls configs/
 # agent.yaml  broker.yaml  visualization.yaml
 
-# 根据环境修改配置
-vim configs/broker.yaml       # 修改 Redis 连接信息
-vim configs/agent.yaml        # 修改 Agent 配置
-vim configs/visualization.yaml # 修改可视化服务配置
+# Modify configurations for your environment
+vim configs/broker.yaml       # Modify Redis connection info
+vim configs/agent.yaml        # Modify Agent configuration
+vim configs/visualization.yaml # Modify visualization service configuration
 ```
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
-### 单机部署
+### Single Machine Deployment
 
-#### 方式一：一键启动（推荐）
+#### Method 1: One-click Start (Recommended)
 
 ```bash
-# 启动 Redis
+# Start Redis
 redis-server &
 
-# 编译并启动所有服务
+# Build and start all services
 make start
 
-# 访问 Web 界面
-# 浏览器访问 http://localhost:8080
+# Access Web Interface
+# Browser: http://localhost:8080
 ```
 
-#### 方式二：分步启动
+#### Method 2: Step-by-step Start
 
 ```bash
-# 1. 启动 Redis
+# 1. Start Redis
 redis-server
 
-# 2. 编译项目
+# 2. Build project
 make build
 
-# 3. 分别启动各组件（推荐开启多个终端）
-make run-broker     # 启动Broker
-make run-agent      # 启动Agent  
-make run-viz        # 启动Visualization
+# 3. Start components separately (recommended to open multiple terminals)
+make run-broker     # Start Broker
+make run-agent      # Start Agent  
+make run-viz        # Start Visualization
 
-# 4. 访问 Web 界面
-# 浏览器访问 http://localhost:8080
+# 4. Access Web Interface
+# Browser: http://localhost:8080
 ```
 
-#### 服务管理命令
+#### Service Management Commands
 
 ```bash
-# 查看服务状态
+# Check service status
 make status
 
-# 查看实时日志
+# View real-time logs
 make logs
 
-# 停止所有服务
+# Stop all services
 make stop
 ```
 
-### 集群部署
+### Cluster Deployment
 
-#### Broker 集群
+#### Broker Cluster
 
 ```bash
-# 节点 1
-./bin/broker -config configs/broker-node1.yaml
+# Modify node information in configuration files, then start multiple nodes
+# Node 1 (modify configs/broker.yaml)
+./bin/broker -config configs/broker.yaml
 
-# 节点 2  
+# Node 2 (need to copy and modify configuration)
+cp configs/broker.yaml configs/broker-node2.yaml
+# Modify node.id and node.address
 ./bin/broker -config configs/broker-node2.yaml
-
-# 节点 3
-./bin/broker -config configs/broker-node3.yaml
 ```
 
-#### 多 Agent 部署
+#### Multi-Agent Deployment
 
 ```bash
-# 在各个主机上启动 Agent
+# Start Agent on each host (modify host_id)
 ./bin/agent -config configs/agent.yaml
 ```
 
-## 📊 使用说明
+## 📊 Usage Guide
 
-### Web 界面功能
+### Web Interface Features
 
-- **实时指标**: 查看 CPU、内存、网络、磁盘使用率
-- **Top-K 分析**: CPU 使用率前 5 排行榜
-- **历史数据**: 时间序列图表展示
-- **详细指标**: 所有采集指标的原始数据
+- **Real-time Metrics**: View CPU, memory, network, disk utilization
+- **Top-K Analysis**: CPU usage top 5 leaderboard
+- **Historical Data**: Time series chart display
+- **Detailed Metrics**: Raw data of all collected metrics
 
-### API 接口
+### API Interfaces
 
-#### 获取指标数据
+#### Get Metrics Data
 ```bash
 curl "http://localhost:8080/api/metrics?host=host-1&start=1640995200&end=1640995800"
 ```
 
-#### Top-K 分析
+#### Top-K Analysis
 ```bash
 curl "http://localhost:8080/api/analysis/topk?metric=cpu_usage&k=5"
 ```
 
-#### 系统状态
+#### System Status
 ```bash
 curl "http://localhost:8080/api/status"
 ```
 
-### 配置说明
+### Configuration Guide
 
-#### Agent 配置 (configs/agent.yaml)
+#### Agent Configuration (configs/agent.yaml)
 
 ```yaml
-host:
-  id: "host-1"
-  name: "Web Server 1"
+agent:
+  host_id: "host-1"
+  hostname: "localhost"
+  ip: "127.0.0.1"
 
 collect:
-  interval: 5s
+  interval: 1s
+  batch_size: 100
   metrics:
     - cpu
     - memory
@@ -194,16 +198,20 @@ collect:
     - disk
 
 broker:
-  address: "localhost:9090"
-  timeout: 10s
+  endpoints:
+    - "localhost:9093"
+  timeout: 5s
 ```
 
-#### Broker 配置 (configs/broker.yaml)
+#### Broker Configuration (configs/broker.yaml)
 
 ```yaml
 node:
   id: "broker-1"
-  address: "localhost:9090"
+  address: "localhost:9095"
+
+grpc:
+  port: 9093
 
 storage:
   redis:
@@ -213,154 +221,151 @@ storage:
     key_prefix: "monitor:"
 
 raft:
-  log_dir: "./data/raft/logs"
-  snapshot_dir: "./data/raft/snapshots"
+  log_dir: "data/raft/logs"
+  snapshot_dir: "data/raft/snapshots"
 ```
 
-#### Visualization 配置 (configs/visualization.yaml)
+#### Visualization Configuration (configs/visualization.yaml)
 
 ```yaml
 server:
-  address: ":8080"
+  host: "localhost"
+  port: 8080
   
 broker:
-  addresses:
-    - "localhost:9090"
+  endpoints:
+    - "localhost:9093"
 
 websocket:
   enable: true
   
 quic:
-  enable: false
+  enable: true
+  port: 8081
 ```
 
-## 🏗️ 架构说明
+## 🏗️ Architecture Overview
 
-### 组件架构
+### Component Architecture
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │    Agent    │───▶│   Broker    │───▶│Visualization│
-│   (采集)    │    │  (存储/路由) │    │  (展示)     │
+│ (Collection)│    │(Storage/Route)│   │ (Display)   │
 └─────────────┘    └─────────────┘    └─────────────┘
                           │
                           ▼
                    ┌─────────────┐
                    │    Redis    │
-                   │   (存储)    │
+                   │  (Storage)  │
                    └─────────────┘
 ```
 
-### 数据流
+### Data Flow
 
-1. **Agent** 周期性采集系统指标
-2. **Broker** 接收数据并存储到 Redis
-3. **Visualization** 从 Broker 查询数据
-4. **WebSocket** 实时推送到前端界面
+1. **Agent** periodically collects system metrics
+2. **Broker** receives data and stores it in Redis
+3. **Visualization** queries data from Broker
+4. **WebSocket** pushes real-time data to frontend interface
 
-### 目录结构
+### Directory Structure
 
 ```
 monitor/
-├── agent/              # Agent 组件
-├── broker/             # Broker 组件  
-├── visualization/      # Visualization 组件
-├── pkg/                # 共享包
-│   ├── storage/        # 存储抽象层
-│   ├── hash/           # 一致性哈希
-│   ├── queue/          # 消息队列
-│   └── algorithm/      # 通用算法
-├── proto/              # gRPC 协议定义
-├── configs/            # 配置文件
-└── static/             # 前端静态资源
+├── agent/              # Agent component
+├── broker/             # Broker component  
+├── visualization/      # Visualization component
+├── pkg/                # Shared packages
+│   ├── storage/        # Storage abstraction layer
+│   ├── hash/           # Consistent hashing
+│   ├── queue/          # Message queue
+│   └── algorithm/      # Common algorithms
+├── proto/              # gRPC protocol definitions
+├── configs/            # Configuration files
+└── static/             # Frontend static resources
 ```
 
-## 🔧 开发指南
+## 🔧 Development Guide
 
-### 本地开发
+### Local Development
 
 ```bash
-# 查看所有可用命令
+# View all available commands
 make help
 
-# 启动开发环境（清理+编译）
+# Start development environment (clean+build)
 make dev
 
-# 运行测试
+# Run tests
 make test
 
-# 测试C/C++模块
+# Test C/C++ modules
 make test-c-cpp
 
-# 代码格式化
+# Code formatting
 make fmt
 
-# 代码检查（需要安装golangci-lint）
+# Code linting (requires golangci-lint)
 make lint
 
-# 清理构建产物
+# Clean build artifacts
 make clean
 ```
 
-### 测试 Redis 连接
+### Test Connections
 
 ```bash
-go run test_redis.go
+# Test Redis connection
+redis-cli ping
+
+# Run project tests
+make test
 ```
 
-### 添加新指标
+### Adding New Metrics
 
-1. 在 `agent/internal/collector/` 添加新的采集器
-2. 在 `proto/monitor.proto` 中定义新的指标类型
-3. 更新前端展示逻辑
+1. Add new collector in `agent/internal/collector/`
+2. Define new metric types in `proto/monitor.proto`
+3. Update frontend display logic
 
-## 📈 性能特性
+## 📈 Performance Features
 
-- **高吞吐**: C 实现的 Ring Buffer 支持高频数据采集
-- **低延迟**: Top-K 算法毫秒级响应时间
-- **可扩展**: 一致性哈希支持节点动态增减
-- **高可用**: Raft 共识保证 99.9% 可用性
+- **High-frequency Collection**: 1-second interval collection, batch processing of 100 entries, Ring Buffer 2000 entries
+- **Lock-free Design**: C-layer CAS atomic operations, true lock-free queue, avoiding lock contention
+- **Distributed Consistency**: Raft protocol cluster consensus, consistent hashing data sharding
+- **Real-time Transmission**: gRPC streaming transmission, WebSocket/QUIC real-time push
 
-## 🔍 监控指标
+## 🔍 Monitoring Metrics
 
-### 系统指标
-- **CPU**: 使用率、负载均衡
-- **内存**: 使用量、缓存、交换分区
-- **网络**: 流量、包数、错误率
-- **磁盘**: 使用率、读写速度、IOPS
+### System Metrics
+- **CPU**: Usage rate, load balancing
+- **Memory**: Usage, cache, swap partition
+- **Network**: Traffic, packet count, error rate
+- **Disk**: Usage rate, read/write speed, IOPS
 
-### 应用指标
-- **连接数**: 活跃连接、连接池状态
-- **响应时间**: API 响应延迟分布
-- **错误率**: 4xx/5xx 错误统计
+### Application Metrics
+- **Connections**: Active connections, connection pool status
+- **Response Time**: API response latency distribution
+- **Error Rate**: 4xx/5xx error statistics
 
-## 🛡️ 安全说明
+## 🛡️ Security Notes
 
-- JWT 认证（可配置开启/关闭）
-- Redis 连接密码保护
-- gRPC TLS 加密（可选）
-- 配置文件敏感信息保护
+- JWT authentication (configurable enable/disable)
+- Redis connection password protection
+- gRPC TLS encryption (optional)
+- Configuration file sensitive information protection
 
-## 📝 许可证
+## 📝 License
 
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🤝 贡献
 
-欢迎提交 Issue 和 Pull Request！
+## 🔖 Version History
 
-1. Fork 本项目
-2. 创建功能分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 创建 Pull Request
-
-## 🔖 版本历史
-
-- **v1.0.0** - 初始版本，基础监控功能
-- **v1.1.0** - 增加 Top-K 分析功能
-- **v1.2.0** - 支持集群部署和高可用
+- **v1.0.0** - Initial version, basic monitoring features
+- **v1.1.0** - Added Top-K analysis features
+- **v1.2.0** - Support for cluster deployment and high availability
 
 ---
 
-⭐ 如果这个项目对你有帮助，请给个 Star！
+⭐ If this project helps you, please give it a Star!
