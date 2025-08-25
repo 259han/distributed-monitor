@@ -10,9 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/han-fei/monitor/agent/internal/algorithm"
 	"github.com/han-fei/monitor/agent/internal/config"
 	"github.com/han-fei/monitor/agent/internal/models"
+	"github.com/han-fei/monitor/pkg/algorithm"
+	"github.com/han-fei/monitor/pkg/interfaces"
 )
 
 // NetworkCollector 网络指标采集器
@@ -76,7 +77,7 @@ func (c *NetworkCollector) Stop() error {
 }
 
 // Collect 采集网络指标
-func (c *NetworkCollector) Collect() ([]models.Metric, error) {
+func (c *NetworkCollector) Collect() ([]interfaces.Metric, error) {
 	var metrics []models.Metric
 
 	// 读取网络统计
@@ -230,7 +231,7 @@ func (c *NetworkCollector) Collect() ([]models.Metric, error) {
 	c.prevStats = currentStats
 	c.prevTime = now
 
-	return metrics, nil
+	return ConvertMetrics(metrics), nil
 }
 
 // readNetworkStats 读取网络统计

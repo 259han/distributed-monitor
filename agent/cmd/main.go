@@ -10,10 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/han-fei/monitor/agent/internal/algorithm"
 	"github.com/han-fei/monitor/agent/internal/collector"
 	"github.com/han-fei/monitor/agent/internal/config"
 	"github.com/han-fei/monitor/agent/internal/registry"
+	"github.com/han-fei/monitor/pkg/algorithm"
 )
 
 var (
@@ -46,8 +46,34 @@ func main() {
 		defer hostRegistry.Stop()
 	}
 
+	// 创建算法管理器配置
+	algConfig := &algorithm.Config{}
+	if cfg.Algorithms.SlidingWindow.Enable {
+		algConfig.Algorithms.SlidingWindow.Enable = cfg.Algorithms.SlidingWindow.Enable
+		algConfig.Algorithms.SlidingWindow.Size = cfg.Algorithms.SlidingWindow.Size
+		algConfig.Algorithms.SlidingWindow.MaxAge = cfg.Algorithms.SlidingWindow.MaxAge
+		algConfig.Algorithms.SlidingWindow.Adaptive = cfg.Algorithms.SlidingWindow.Adaptive
+		algConfig.Algorithms.SlidingWindow.MinSize = cfg.Algorithms.SlidingWindow.MinSize
+		algConfig.Algorithms.SlidingWindow.MaxSize = cfg.Algorithms.SlidingWindow.MaxSize
+		algConfig.Algorithms.SlidingWindow.GrowthFactor = cfg.Algorithms.SlidingWindow.GrowthFactor
+		algConfig.Algorithms.SlidingWindow.ShrinkFactor = cfg.Algorithms.SlidingWindow.ShrinkFactor
+	}
+	if cfg.Algorithms.BloomFilter.Enable {
+		algConfig.Algorithms.BloomFilter.Enable = cfg.Algorithms.BloomFilter.Enable
+		algConfig.Algorithms.BloomFilter.Size = uint(cfg.Algorithms.BloomFilter.Size)
+		algConfig.Algorithms.BloomFilter.FalsePositive = cfg.Algorithms.BloomFilter.FalsePositive
+	}
+	if cfg.Algorithms.TimeWheel.Enable {
+		algConfig.Algorithms.TimeWheel.Enable = cfg.Algorithms.TimeWheel.Enable
+		algConfig.Algorithms.TimeWheel.TickInterval = cfg.Algorithms.TimeWheel.TickInterval
+		algConfig.Algorithms.TimeWheel.SlotNum = cfg.Algorithms.TimeWheel.SlotNum
+	}
+	if cfg.Algorithms.PrefixTree.Enable {
+		algConfig.Algorithms.PrefixTree.Enable = cfg.Algorithms.PrefixTree.Enable
+	}
+
 	// 创建算法管理器
-	algorithmManager := algorithm.NewAlgorithmManager(cfg)
+	algorithmManager := algorithm.NewAlgorithmManager(algConfig)
 	if err := algorithmManager.Start(); err != nil {
 		log.Fatalf("启动算法管理器失败: %v", err)
 	}

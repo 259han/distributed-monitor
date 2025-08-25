@@ -21,25 +21,22 @@ import (
 	"github.com/han-fei/monitor/agent/internal/config"
 	"github.com/han-fei/monitor/agent/internal/models"
 	"github.com/han-fei/monitor/agent/internal/service"
+	"github.com/han-fei/monitor/pkg/interfaces"
 )
 
-// Collector 数据采集器接口
-type Collector interface {
-	Start(ctx context.Context) error
-	Stop() error
-	Collect() ([]models.Metric, error)
-}
+// 使用pkg/interfaces中的Collector接口
+type Collector = interfaces.Collector
 
 // MetricsCollector 指标采集器
 type MetricsCollector struct {
-	config         *config.Config
-	collectors     map[string]Collector
-	metricsBuffer  *c.LockFreeQueue
-	wg             sync.WaitGroup
-	mu             sync.Mutex
-	stopCh         chan struct{}
-	hostInfo       models.HostInfo
-	grpcClient     *service.GRPCClient
+	config           *config.Config
+	collectors       map[string]Collector
+	metricsBuffer    *c.LockFreeQueue
+	wg               sync.WaitGroup
+	mu               sync.Mutex
+	stopCh           chan struct{}
+	hostInfo         models.HostInfo
+	grpcClient       *service.GRPCClient
 	useLockFreeQueue bool // 是否使用无锁队列
 }
 
@@ -157,12 +154,14 @@ func (mc *MetricsCollector) collectMetrics() {
 
 	// 从每个采集器获取指标
 	for name, collector := range mc.collectors {
-		metrics, err := collector.Collect()
+		interfaceMetrics, err := collector.Collect()
 		if err != nil {
 			// 记录错误，但继续采集其他指标
 			log.Printf("采集%s指标失败: %v", name, err)
 			continue
 		}
+		// 将接口 Metric 转换为内部 Metric
+		metrics := ConvertBackMetrics(interfaceMetrics)
 		allMetrics = append(allMetrics, metrics...)
 	}
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/han-fei/monitor/agent/internal/config"
 	"github.com/han-fei/monitor/agent/internal/models"
+	"github.com/han-fei/monitor/pkg/interfaces"
 )
 
 // MemoryCollector 内存指标采集器
@@ -131,13 +132,13 @@ func (c *MemoryCollector) Stop() error {
 }
 
 // Collect 采集内存指标
-func (c *MemoryCollector) Collect() ([]models.Metric, error) {
+func (c *MemoryCollector) Collect() ([]interfaces.Metric, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	// 如果缓存未过期，直接返回缓存数据
 	if time.Since(c.lastCollect) < c.cacheDuration && len(c.cachedMetrics) > 0 {
-		return c.cachedMetrics, nil
+		return ConvertMetrics(c.cachedMetrics), nil
 	}
 
 	// 否则重新采集
@@ -146,7 +147,7 @@ func (c *MemoryCollector) Collect() ([]models.Metric, error) {
 		return nil, err
 	}
 
-	return metrics, nil
+	return ConvertMetrics(metrics), nil
 }
 
 // collectAllMetrics 采集所有内存指标

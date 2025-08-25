@@ -13,11 +13,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/han-fei/monitor/broker/internal/hash"
 	"github.com/han-fei/monitor/broker/internal/host"
 	"github.com/han-fei/monitor/broker/internal/queue"
 	"github.com/han-fei/monitor/broker/internal/raft"
 	"github.com/han-fei/monitor/broker/internal/storage"
+	"github.com/han-fei/monitor/pkg/hash"
 	pb "github.com/han-fei/monitor/proto"
 )
 

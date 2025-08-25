@@ -12,6 +12,7 @@ import (
 
 	"github.com/han-fei/monitor/agent/internal/config"
 	"github.com/han-fei/monitor/agent/internal/models"
+	"github.com/han-fei/monitor/pkg/interfaces"
 )
 
 // DiskCollector 磁盘指标采集器
@@ -40,7 +41,7 @@ func (c *DiskCollector) Stop() error {
 }
 
 // Collect 采集磁盘指标
-func (c *DiskCollector) Collect() ([]models.Metric, error) {
+func (c *DiskCollector) Collect() ([]interfaces.Metric, error) {
 	var metrics []models.Metric
 
 	// 获取磁盘使用情况
@@ -122,7 +123,7 @@ func (c *DiskCollector) Collect() ([]models.Metric, error) {
 		})
 	}
 
-	return metrics, nil
+	return ConvertMetrics(metrics), nil
 }
 
 // DiskUsage 磁盘使用情况

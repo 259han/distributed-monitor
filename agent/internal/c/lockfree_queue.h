@@ -3,6 +3,22 @@
 
 #include <stdlib.h>
 #include <stdatomic.h>
+#include <stdint.h>
+
+// Metric structure for Go-C interaction
+typedef struct {
+    char name[256];    // Metric name
+    double value;      // Metric value
+    char unit[64];     // Metric unit
+} Metric;
+
+// MetricsData structure for Go-C interaction
+typedef struct {
+    char host_id[256];    // Host ID
+    int64_t timestamp;    // Timestamp
+    int metrics_count;    // Number of metrics
+    Metric* metrics;      // Array of metrics
+} MetricsData;
 
 // Maximum number of connections the queue can hold
 #define LFQ_MAX_CONNECTIONS 4096

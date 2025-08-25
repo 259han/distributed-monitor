@@ -6,8 +6,8 @@ build: build-agent build-broker build-viz
 
 proto:
 	@echo "生成Protocol Buffers代码..."
-	@mkdir -p github.com/han-fei/monitor/proto
-	@protoc --go_out=. --go-grpc_out=. proto.bak/monitor.proto
+	@protoc --go_out=proto --go-grpc_out=proto proto/monitor.proto
+	@if [ -d "proto/proto" ]; then mv proto/proto/*.go proto/ && rm -rf proto/proto; fi
 
 build-agent: proto build-c
 	@echo "构建数据采集代理..."
@@ -72,7 +72,7 @@ test-c-cpp:
 clean:
 	@echo "清理构建产物..."
 	@rm -rf bin/
-	@rm -rf proto/github.com/
+	@rm -rf github.com/
 	@find . -name "*.pb.go" -delete
 	@find . -name "*.o" -delete
 

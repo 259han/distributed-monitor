@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package monitor;
 
-option go_package = "github.com/han-fei/monitor/proto";
+option go_package = "./proto";
 
 // 监控数据服务
 service MonitorService {

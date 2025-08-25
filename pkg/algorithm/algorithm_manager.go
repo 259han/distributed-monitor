@@ -7,13 +7,41 @@ import (
 	"sync"
 	"time"
 
-	config "github.com/han-fei/monitor/pkg/agent"
 	"github.com/willf/bloom"
 )
 
+// Config 算法配置
+type Config struct {
+	Algorithms struct {
+		SlidingWindow struct {
+			Enable       bool
+			Size         int
+			MaxAge       time.Duration
+			Adaptive     bool
+			MinSize      int
+			MaxSize      int
+			GrowthFactor float64
+			ShrinkFactor float64
+		}
+		BloomFilter struct {
+			Enable        bool
+			Size          uint
+			FalsePositive float64
+		}
+		TimeWheel struct {
+			Enable       bool
+			TickInterval time.Duration
+			SlotNum      int
+		}
+		PrefixTree struct {
+			Enable bool
+		}
+	}
+}
+
 // AlgorithmManager 算法管理器
 type AlgorithmManager struct {
-	config         *config.Config
+	config         *Config
 	mu             sync.RWMutex
 	slidingWindows map[string]*SlidingWindow
 	bloomFilter    *bloom.BloomFilter
@@ -36,7 +64,7 @@ type AlgorithmStats struct {
 }
 
 // NewAlgorithmManager 创建算法管理器
-func NewAlgorithmManager(cfg *config.Config) *AlgorithmManager {
+func NewAlgorithmManager(cfg *Config) *AlgorithmManager {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	manager := &AlgorithmManager{

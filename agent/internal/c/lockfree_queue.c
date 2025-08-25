@@ -94,7 +94,8 @@ int lfq_enqueue(lockfree_queue_t* queue, int fd, void* data) {
             atomic_store_explicit(&queue->connections[tail].state, 1, memory_order_release);
             return 0;
         }
-        // CAS失败，重试
+        // CAS失败，避免busy wait，让出CPU
+        __asm__ __volatile__("pause" ::: "memory");
     } while (1);
 }
 
@@ -128,7 +129,8 @@ int lfq_dequeue(lockfree_queue_t* queue, lfq_connection_t* conn) {
         // 使用acquire语义确保读取到完整的数据
         int state = atomic_load_explicit(&queue->connections[head].state, memory_order_acquire);
         if (state != 1) {
-            // 数据还未完全写入，稍后重试
+            // 数据还未完全写入，避免busy wait，让出CPU
+            __asm__ __volatile__("pause" ::: "memory");
             continue;
         }
 
