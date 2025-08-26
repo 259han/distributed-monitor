@@ -244,7 +244,9 @@ func pullDataFromBroker(ctx context.Context, client *service.GRPCClient, wsServe
 
 				// 广播增量数据，并更新lastSent
 				var maxTS int64
+				totalMetrics := 0
 				for _, data := range metrics {
+					totalMetrics += len(data.Metrics)
 					wsServer.Broadcast(data)
 					if quicServer != nil {
 						quicServer.SendData(data)
@@ -255,13 +257,14 @@ func pullDataFromBroker(ctx context.Context, client *service.GRPCClient, wsServe
 				}
 				if maxTS > 0 {
 					lastSent[hostID] = maxTS
+					log.Printf("主机 %s 推送 %d 条数据记录，总计 %d 个指标", hostID, len(metrics), totalMetrics)
 					// 采样打印一次指标名，便于排查前端为空
 					if len(metrics) > 0 && len(metrics[0].Metrics) > 0 {
 						names := make([]string, 0, len(metrics[0].Metrics))
 						for i := 0; i < len(metrics[0].Metrics) && i < 5; i++ {
 							names = append(names, metrics[0].Metrics[i].Name)
 						}
-						log.Printf("主机 %s 推送样例指标: %v", hostID, names)
+						log.Printf("主机 %s 样例指标: %v", hostID, names)
 					}
 				} else {
 					log.Printf("主机 %s 本轮未获得任何数据", hostID)

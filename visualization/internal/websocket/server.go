@@ -102,7 +102,7 @@ func (s *Server) Broadcast(data *models.MetricsData) {
 		var frontendName string
 		var convertedValue float64
 		var convertedUnit string
-		
+
 		switch {
 		case metric.Name == "cpu.usage":
 			frontendName = "cpu_usage"
@@ -174,7 +174,7 @@ func (s *Server) Broadcast(data *models.MetricsData) {
 			convertedValue = metric.Value / (1024 * 1024 * 1024)
 			convertedUnit = "GB"
 		default:
-			// 对于其他指标，保持原名称
+			// 对于其他指标，保持原名称，但确保所有指标都被包含
 			frontendName = metric.Name
 			convertedValue = metric.Value
 			convertedUnit = metric.Unit
@@ -196,6 +196,10 @@ func (s *Server) Broadcast(data *models.MetricsData) {
 			"metrics":   convertedMetrics,
 		},
 	}
+
+	// 记录指标数量
+	log.Printf("WebSocket广播: 主机=%s, 原始指标数=%d, 转换后指标数=%d",
+		data.HostID, len(data.Metrics), len(convertedMetrics))
 
 	// 序列化数据
 	jsonData, err := json.Marshal(message)

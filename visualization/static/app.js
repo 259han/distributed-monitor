@@ -3,6 +3,7 @@ class MonitorApp {
         this.ws = null;
         this.charts = {};
         this.isConnected = false;
+        this.currentMetrics = {}; // 添加当前指标数据存储
         
         this.init();
     }
@@ -23,8 +24,6 @@ class MonitorApp {
             this.isConnected = true;
             this.updateConnectionStatus();
             console.log('WebSocket connected');
-            // 连接成功后确保关闭任何模拟数据
-            this.stopSimulatedData();
         };
 
         this.ws.onmessage = (event) => {
@@ -41,7 +40,7 @@ class MonitorApp {
 
         this.ws.onerror = (error) => {
             console.error('WebSocket error:', error);
-            // 保持重连，不再启动模拟数据，避免误导
+            // 保持重连
         };
     }
 
@@ -75,7 +74,7 @@ class MonitorApp {
                 const message = JSON.parse(text);
                 switch (message.type) {
                     case 'metrics':
-                        this.stopSimulatedData();
+                        console.log('收到指标数据:', message.data.host_id, '指标数量:', message.data.metrics?.length || 0);
                         this.updateMetrics(message.data);
                         break;
                     case 'alert':
@@ -94,6 +93,14 @@ class MonitorApp {
     }
 
     updateMetrics(data) {
+        // 存储当前指标数据
+        if (data.host_id) {
+            this.currentMetrics[data.host_id] = {};
+            for (const metric of data.metrics) {
+                this.currentMetrics[data.host_id][metric.name] = metric.value;
+            }
+        }
+
         // Helper: 根据候选名称获取第一个匹配的指标
         const getMetricByNames = (names) => {
             for (const n of names) {
@@ -150,13 +157,45 @@ class MonitorApp {
 
         // 详细指标回显（帮助对齐命名差异）
         const allMetricsEl = document.getElementById('allMetrics');
+        const metricsCountEl = document.getElementById('metricsCount');
         if (allMetricsEl && Array.isArray(data.metrics)) {
+            console.log('更新详细指标显示，指标数量:', data.metrics.length);
+            
+            // 更新指标计数
+            if (metricsCountEl) {
+                metricsCountEl.textContent = `(${data.metrics.length})`;
+            }
+            
+            // 格式化指标显示
             const lines = data.metrics.map(m => {
-                const val = typeof m.value === 'number' ? m.value.toFixed(4) : m.value;
-                const unit = m.unit ? ` ${m.unit}` : '';
+                let val = m.value;
+                let unit = m.unit || '';
+                
+                // 格式化数值显示
+                if (typeof val === 'number') {
+                    if (val >= 1000000) {
+                        val = (val / 1000000).toFixed(2);
+                        unit = unit ? `M${unit}` : 'M';
+                    } else if (val >= 1000) {
+                        val = (val / 1000).toFixed(2);
+                        unit = unit ? `K${unit}` : 'K';
+                    } else if (val < 0.01 && val > 0) {
+                        val = val.toFixed(6);
+                    } else {
+                        val = val.toFixed(4);
+                    }
+                }
+                
                 return `${m.name}: ${val}${unit}`;
             });
-            allMetricsEl.innerText = lines.join('\n');
+            
+            // 按指标名称排序，便于查看
+            lines.sort();
+            
+            // 使用textContent而不是innerText以提高性能
+            allMetricsEl.textContent = lines.join('\n');
+            
+            console.log('详细指标显示更新完成，显示行数:', lines.length);
         }
     }
 
@@ -355,51 +394,7 @@ class MonitorApp {
         this.renderTopK(topKData.slice(0, 5));
     }
 
-    startSimulatedData() {
-        if (this.simulationInterval) {
-            clearInterval(this.simulationInterval);
-        }
 
-        // 生成模拟数据
-        this.simulationInterval = setInterval(() => {
-            const simulatedData = {
-                type: 'metrics',
-                data: {
-                    host_id: 'host-1',
-                    timestamp: Date.now(),
-                    metrics: [
-                        {
-                            name: 'cpu_usage',
-                            value: Math.random() * 100,
-                            unit: '%'
-                        },
-                        {
-                            name: 'memory_usage',
-                            value: Math.random() * 100,
-                            unit: '%'
-                        },
-                        {
-                            name: 'network_traffic',
-                            value: Math.random() * 50,
-                            unit: 'MB/s'
-                        }
-                    ]
-                }
-            };
-
-            this.updateMetrics(simulatedData.data);
-        }, 2000);
-
-        console.log('Started simulated data generation');
-    }
-
-    stopSimulatedData() {
-        if (this.simulationInterval) {
-            clearInterval(this.simulationInterval);
-            this.simulationInterval = null;
-            console.log('Stopped simulated data');
-        }
-    }
 }
 
 // 初始化应用
