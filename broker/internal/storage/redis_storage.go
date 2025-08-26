@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/han-fei/monitor/broker/internal/models"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -400,16 +401,8 @@ func (s *RedisStorage) Health(ctx context.Context) error {
 	return s.client.Ping(ctx).Err()
 }
 
-// MetricsData 指标数据结构
-type MetricsData struct {
-	HostID    string                 `json:"host_id"`
-	Timestamp int64                  `json:"timestamp"`
-	Metrics   map[string]interface{} `json:"metrics"`
-	Tags      map[string]string      `json:"tags,omitempty"`
-}
-
 // SaveMetricsData 保存指标数据
-func (s *RedisStorage) SaveMetricsData(ctx context.Context, data *MetricsData) error {
+func (s *RedisStorage) SaveMetricsData(ctx context.Context, data *models.MetricsData) error {
 	// 构建键，确保使用正确的键前缀格式
 	// 使用统一的键格式：monitor:metrics:hostID:timestamp
 	key := fmt.Sprintf("metrics:%s:%d", data.HostID, data.Timestamp)
@@ -510,8 +503,13 @@ func (s *RedisStorage) SaveMetricsData(ctx context.Context, data *MetricsData) e
 	return nil
 }
 
+// StoreMetrics 实现 MetricsStorage 接口
+func (s *RedisStorage) StoreMetrics(ctx context.Context, data models.MetricsData) error {
+	return s.SaveMetricsData(ctx, &data)
+}
+
 // GetMetricsData 获取指标数据
-func (s *RedisStorage) GetMetricsData(ctx context.Context, hostID string, timestamp int64) (*MetricsData, error) {
+func (s *RedisStorage) GetMetricsData(ctx context.Context, hostID string, timestamp int64) (*models.MetricsData, error) {
 	// 使用统一的键格式：monitor:metrics:hostID:timestamp
 	key := fmt.Sprintf("metrics:%s:%d", hostID, timestamp)
 	formattedKey := s.formatKey(key)
@@ -527,7 +525,7 @@ func (s *RedisStorage) GetMetricsData(ctx context.Context, hostID string, timest
 	}
 
 	// 解析数据
-	data := &MetricsData{
+	data := &models.MetricsData{
 		HostID:    result["host_id"],
 		Timestamp: timestamp,
 		Metrics:   make(map[string]interface{}),
@@ -552,7 +550,7 @@ func (s *RedisStorage) GetMetricsData(ctx context.Context, hostID string, timest
 }
 
 // GetMetricsDataRange 获取时间范围内的指标数据
-func (s *RedisStorage) GetMetricsDataRange(ctx context.Context, hostID string, start, end int64) ([]*MetricsData, error) {
+func (s *RedisStorage) GetMetricsDataRange(ctx context.Context, hostID string, start, end int64) ([]*models.MetricsData, error) {
 	// 使用统一的键格式：monitor:index:metrics:hostID
 	indexKey := fmt.Sprintf("index:metrics:%s", hostID)
 	formattedIndexKey := s.formatKey(indexKey)
@@ -569,7 +567,7 @@ func (s *RedisStorage) GetMetricsDataRange(ctx context.Context, hostID string, s
 	}
 
 	// 批量获取数据
-	var metrics []*MetricsData
+	var metrics []*models.MetricsData
 	for _, key := range keys {
 		// 解析时间戳
 		parts := strings.Split(key, ":")

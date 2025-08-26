@@ -13,6 +13,7 @@ type Config struct {
 	Agent      AgentConfig      `yaml:"agent"`
 	Collect    CollectConfig    `yaml:"collect"`
 	Broker     BrokerConfig     `yaml:"broker"`
+	Kafka      KafkaConfig      `yaml:"kafka"`      // Kafka配置
 	Log        LogConfig        `yaml:"log"`
 	Advanced   AdvancedConfig   `yaml:"advanced"`
 	HostRegistry HostRegistryConfig `yaml:"host_registry"`
@@ -123,6 +124,17 @@ type PrefixTreeConfig struct {
 	CaseSensitive bool   `yaml:"case_sensitive"`
 }
 
+// KafkaConfig Kafka配置
+type KafkaConfig struct {
+	Enabled      bool          `yaml:"enabled"`       // 是否启用Kafka
+	Brokers      []string      `yaml:"brokers"`       // Kafka服务器地址列表
+	Topic        string        `yaml:"topic"`         // 主题名称
+	BatchSize    int           `yaml:"batch_size"`    // 批处理大小
+	BatchTimeout time.Duration `yaml:"batch_timeout"` // 批处理超时时间
+	Encoding     string        `yaml:"encoding"`      // 编码格式 (json 或 protobuf)
+	MaxRetry     int           `yaml:"max_retry"`     // 最大重试次数
+}
+
 var (
 	config *Config
 	once   sync.Once
@@ -220,6 +232,23 @@ func LoadConfig(path string) (*Config, error) {
 		}
 		if config.Algorithms.PrefixTree.MaxDepth == 0 {
 			config.Algorithms.PrefixTree.MaxDepth = 32
+		}
+		
+		// 设置Kafka默认值
+		if config.Kafka.BatchSize == 0 {
+			config.Kafka.BatchSize = 100
+		}
+		if config.Kafka.BatchTimeout == 0 {
+			config.Kafka.BatchTimeout = 1 * time.Second
+		}
+		if config.Kafka.MaxRetry == 0 {
+			config.Kafka.MaxRetry = 3
+		}
+		if config.Kafka.Encoding == "" {
+			config.Kafka.Encoding = "json"
+		}
+		if config.Kafka.Topic == "" {
+			config.Kafka.Topic = "metrics"
 		}
 	})
 	return config, err

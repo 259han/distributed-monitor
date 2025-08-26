@@ -1,3 +1,5 @@
+//go:build integration && compression
+
 package main
 
 import (
@@ -8,6 +10,7 @@ import (
 	"time"
 
 	"github.com/han-fei/monitor/broker/internal/storage"
+	"github.com/han-fei/monitor/broker/internal/models"
 	"github.com/han-fei/monitor/pkg/compression"
 	"github.com/han-fei/monitor/pkg/compression/gorilla"
 )
@@ -95,7 +98,7 @@ func main() {
 // testBasicCompression 测试基础压缩功能
 func testBasicCompression(ctx context.Context, storage *storage.CompressedRedisStorage) error {
 	// 创建测试数据（单个数值）
-	testData := &storage.MetricsData{
+	testData := &models.MetricsData{
 		HostID:    "test-host-001",
 		Timestamp: time.Now().Unix(),
 		Metrics: map[string]interface{}{
@@ -131,7 +134,7 @@ func testTimeSeriesCompression(ctx context.Context, storage *storage.CompressedR
 		memorySeries = append(memorySeries, memoryValue)
 	}
 
-	testData := &storage.MetricsData{
+	testData := &models.MetricsData{
 		HostID:    "test-host-002",
 		Timestamp: baseTime,
 		Metrics: map[string]interface{}{
@@ -167,11 +170,11 @@ func testTimeSeriesCompression(ctx context.Context, storage *storage.CompressedR
 // testBatchCompression 测试批量压缩
 func testBatchCompression(ctx context.Context, storage *storage.CompressedRedisStorage) error {
 	baseTime := time.Now().Unix()
-	var batchData []*storage.MetricsData
+	var batchData []*models.MetricsData
 
 	// 创建批量测试数据
 	for i := 0; i < 10; i++ {
-		data := &storage.MetricsData{
+		data := &models.MetricsData{
 			HostID:    fmt.Sprintf("batch-host-%03d", i),
 			Timestamp: baseTime + int64(i),
 			Metrics: map[string]interface{}{

@@ -39,6 +39,17 @@ grpc:
 raft_grpc:
   port: 9094
 
+# Kafka配置
+kafka:
+  enabled: true  # 是否启用Kafka
+  brokers:        # Kafka服务器地址列表
+    - "localhost:9092"
+  topic: "metrics"  # 主题名称
+  group_id: "broker-group"  # 消费者组ID
+  batch_size: 100   # 批处理大小
+  batch_timeout: 1s  # 批处理超时时间
+  max_retry: 3       # 最大重试次数
+
 # QUIC配置
 quic:
   enable: false  # QUIC开关，默认禁用

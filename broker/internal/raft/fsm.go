@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/han-fei/monitor/broker/internal/models"
 	"github.com/han-fei/monitor/broker/internal/storage"
 	"github.com/hashicorp/raft"
 )
@@ -172,7 +173,7 @@ func (f *FSM) applyBatchMetrics(cmd map[string]interface{}) interface{} {
 			ctx := context.Background()
 
 			// 将数据转换为MetricsData结构
-			storageData := &storage.MetricsData{
+			storageData := &models.MetricsData{
 				HostID:    hostID,
 				Timestamp: int64(tsf),
 				Metrics:   make(map[string]interface{}),

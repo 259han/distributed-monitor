@@ -17,6 +17,7 @@ import (
 	"github.com/han-fei/monitor/broker/internal/queue"
 	"github.com/han-fei/monitor/broker/internal/raft"
 	"github.com/han-fei/monitor/broker/internal/storage"
+	"github.com/han-fei/monitor/broker/internal/models"
 	"github.com/han-fei/monitor/pkg/hash"
 	pb "github.com/han-fei/monitor/proto"
 )
@@ -352,7 +353,7 @@ func (s *GRPCServer) applyBatch(batch []interface{}) error {
 // SaveMetrics 保存指标数据
 func (s *GRPCServer) SaveMetrics(ctx context.Context, req *pb.SaveMetricsRequest) (*pb.SaveMetricsResponse, error) {
 	// 转换数据格式
-	metricsData := &storage.MetricsData{
+	metricsData := &models.MetricsData{
 		HostID:    req.HostId,
 		Timestamp: req.Timestamp,
 		Metrics:   make(map[string]interface{}),
@@ -518,7 +519,7 @@ func (s *GRPCServer) GetBrokerStats() map[string]interface{} {
 // handleMetricsMessage 处理指标消息
 func (s *GRPCServer) handleMetricsMessage(ctx context.Context, message *queue.Message) error {
 	// 解析指标数据
-	var metricsData storage.MetricsData
+	var metricsData models.MetricsData
 	if err := json.Unmarshal(message.Payload, &metricsData); err != nil {
 		return fmt.Errorf("解析指标数据失败: %v", err)
 	}

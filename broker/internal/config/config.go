@@ -17,6 +17,7 @@ type Config struct {
 	Hash           HashConfig           `yaml:"hash"`
 	GRPC           GRPCConfig           `yaml:"grpc"`
 	RaftGRPC       RaftGRPCConfig       `yaml:"raft_grpc"`
+	Kafka          KafkaConfig          `yaml:"kafka"`          // Kafka配置
 	Log            LogConfig            `yaml:"log"`
 	Advanced       AdvancedConfig       `yaml:"advanced"`
 	HostManagement HostManagementConfig `yaml:"host_management"`
@@ -145,6 +146,17 @@ type ScalingConfig struct {
 	MaxHosts           int  `yaml:"max_hosts"`
 }
 
+// KafkaConfig Kafka配置
+type KafkaConfig struct {
+	Enabled      bool          `yaml:"enabled"`       // 是否启用Kafka
+	Brokers      []string      `yaml:"brokers"`       // Kafka服务器地址列表
+	Topic        string        `yaml:"topic"`         // 主题名称
+	GroupID      string        `yaml:"group_id"`      // 消费者组ID
+	BatchSize    int           `yaml:"batch_size"`    // 批处理大小
+	BatchTimeout time.Duration `yaml:"batch_timeout"` // 批处理超时时间
+	MaxRetry     int           `yaml:"max_retry"`     // 最大重试次数
+}
+
 // LoadConfig 加载配置文件
 func LoadConfig(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -232,6 +244,23 @@ func setDefaults(config *Config) {
 	// 高级默认值
 	if config.Advanced.BufferSize == 0 {
 		config.Advanced.BufferSize = 1000
+	}
+	
+	// Kafka默认值
+	if config.Kafka.BatchSize == 0 {
+		config.Kafka.BatchSize = 100
+	}
+	if config.Kafka.BatchTimeout == 0 {
+		config.Kafka.BatchTimeout = 1 * time.Second
+	}
+	if config.Kafka.MaxRetry == 0 {
+		config.Kafka.MaxRetry = 3
+	}
+	if config.Kafka.Topic == "" {
+		config.Kafka.Topic = "metrics"
+	}
+	if config.Kafka.GroupID == "" {
+		config.Kafka.GroupID = "broker-group"
 	}
 
 	// 主机管理默认值

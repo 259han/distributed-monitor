@@ -26,7 +26,7 @@ build-broker: proto
 
 build-viz: proto build-cpp
 	@echo "构建可视化分析端..."
-	@mkdir -p bin
+	@mkdir -p binxie
 	@export LD_LIBRARY_PATH=./bin/lib:$$LD_LIBRARY_PATH && go build -buildvcs=false -tags cgo -ldflags "-extldflags '-L./bin/lib -lstreaming_topk -lstdc++ -lpthread'" -o bin/visualization ./visualization/cmd
 
 run-agent:

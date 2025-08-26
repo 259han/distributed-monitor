@@ -13,6 +13,7 @@ require (
 	github.com/hashicorp/raft-boltdb v0.0.0-20250701115049-6cdf087e85ed
 	github.com/quic-go/quic-go v0.54.0
 	github.com/redis/go-redis/v9 v9.11.0
+	github.com/segmentio/kafka-go v0.4.49
 	github.com/willf/bloom v2.0.3+incompatible
 	golang.org/x/crypto v0.38.0
 	google.golang.org/grpc v1.74.2

@@ -37,7 +37,9 @@ type MetricsCollector struct {
 	stopCh           chan struct{}
 	hostInfo         models.HostInfo
 	grpcClient       *service.GRPCClient
+	kafkaProducer    *service.KafkaProducer
 	useLockFreeQueue bool // 是否使用无锁队列
+	useKafka         bool // 是否使用Kafka
 }
 
 // NewMetricsCollector 创建新的指标采集器
@@ -52,7 +54,9 @@ func NewMetricsCollector(cfg *config.Config) *MetricsCollector {
 			IP:       cfg.Agent.IP,
 		},
 		grpcClient:       service.NewGRPCClient(cfg),
+		kafkaProducer:    service.NewKafkaProducer(&cfg.Kafka),
 		useLockFreeQueue: true, // 默认使用无锁队列
+		useKafka:         cfg.Kafka.Enabled, // 是否使用Kafka
 	}
 
 	// 初始化无锁队列
@@ -61,6 +65,13 @@ func NewMetricsCollector(cfg *config.Config) *MetricsCollector {
 		// 如果无锁队列创建失败，回退到Go channel
 		mc.useLockFreeQueue = false
 		log.Printf("警告：无锁队列创建失败，回退到Go channel")
+	}
+
+	// 日志记录Kafka状态
+	if mc.useKafka {
+		log.Printf("Kafka生产者已启用，连接到: %v, 主题: %s", cfg.Kafka.Brokers, cfg.Kafka.Topic)
+	} else {
+		log.Printf("Kafka生产者未启用，将直接使用gRPC发送数据")
 	}
 
 	return mc
@@ -112,6 +123,13 @@ func (mc *MetricsCollector) Stop() error {
 	// 关闭gRPC客户端
 	if err := mc.grpcClient.Close(); err != nil {
 		return err
+	}
+
+	// 关闭Kafka生产者
+	if mc.useKafka && mc.kafkaProducer != nil {
+		if err := mc.kafkaProducer.Close(); err != nil {
+			log.Printf("关闭Kafka生产者失败: %v", err)
+		}
 	}
 
 	// 关闭无锁队列
@@ -221,14 +239,30 @@ func (mc *MetricsCollector) processBatch(ctx context.Context, batch []models.Met
 
 // processBatchDirectly 直接处理单个MetricsData
 func (mc *MetricsCollector) processBatchDirectly(data models.MetricsData) {
-	// 发送数据到中转层
 	ctx := context.Background()
-	log.Printf("正在发送 %d 个指标到 Broker，主机ID: %s", len(data.Metrics), data.HostID)
-	if err := mc.grpcClient.SendMetricsWithRetry(ctx, []models.MetricsData{data}); err != nil {
-		// 记录错误，但不中断处理
-		log.Printf("发送数据失败: %v", err)
+	log.Printf("正在处理 %d 个指标，主机ID: %s", len(data.Metrics), data.HostID)
+	
+	// 如果启用了Kafka，发送到Kafka
+	if mc.useKafka && mc.kafkaProducer != nil {
+		if err := mc.kafkaProducer.SendMetricsWithRetry(ctx, []models.MetricsData{data}); err != nil {
+			log.Printf("发送数据到Kafka失败: %v，尝试使用gRPC发送", err)
+			// Kafka发送失败，回退到gRPC
+			if err := mc.grpcClient.SendMetricsWithRetry(ctx, []models.MetricsData{data}); err != nil {
+				log.Printf("通过gRPC发送数据失败: %v", err)
+			} else {
+				log.Printf("成功通过gRPC发送 %d 个指标", len(data.Metrics))
+			}
+		} else {
+			log.Printf("成功发送 %d 个指标到 Kafka", len(data.Metrics))
+		}
 	} else {
-		log.Printf("成功发送 %d 个指标到 Broker", len(data.Metrics))
+		// 直接通过gRPC发送
+		log.Printf("正在发送 %d 个指标到 Broker，主机ID: %s", len(data.Metrics), data.HostID)
+		if err := mc.grpcClient.SendMetricsWithRetry(ctx, []models.MetricsData{data}); err != nil {
+			log.Printf("发送数据失败: %v", err)
+		} else {
+			log.Printf("成功发送 %d 个指标到 Broker", len(data.Metrics))
+		}
 	}
 }
 
@@ -296,8 +330,23 @@ func (mc *MetricsCollector) processFromLockFreeQueue() {
 	// 处理批量数据
 	if len(batch) > 0 {
 		ctx := context.Background()
-		if err := mc.grpcClient.SendMetricsWithRetry(ctx, batch); err != nil {
-			log.Printf("发送批量数据失败: %v", err)
+		
+		// 如果启用了Kafka，发送到Kafka
+		if mc.useKafka && mc.kafkaProducer != nil {
+			log.Printf("从无锁队列处理 %d 条数据，发送到Kafka", len(batch))
+			if err := mc.kafkaProducer.SendMetricsWithRetry(ctx, batch); err != nil {
+				log.Printf("发送批量数据到Kafka失败: %v，尝试使用gRPC发送", err)
+				// Kafka发送失败，回退到gRPC
+				if err := mc.grpcClient.SendMetricsWithRetry(ctx, batch); err != nil {
+					log.Printf("通过gRPC发送批量数据失败: %v", err)
+				}
+			}
+		} else {
+			// 直接通过gRPC发送
+			log.Printf("从无锁队列处理 %d 条数据，发送到Broker", len(batch))
+			if err := mc.grpcClient.SendMetricsWithRetry(ctx, batch); err != nil {
+				log.Printf("发送批量数据失败: %v", err)
+			}
 		}
 	}
 }

@@ -164,6 +164,19 @@ func main() {
 		log.Fatalf("创建gRPC服务器失败: %v", err)
 	}
 
+	// 创建Kafka消费者（如果启用）
+	var kafkaConsumer *service.KafkaConsumer
+	if cfg.Kafka.Enabled {
+		kafkaConsumer = service.NewKafkaConsumer(&cfg.Kafka, redisStorage)
+		log.Printf("Kafka消费者已创建，连接到: %v, 主题: %s", cfg.Kafka.Brokers, cfg.Kafka.Topic)
+		
+		// 启动Kafka消费者
+		if err := kafkaConsumer.Start(context.Background()); err != nil {
+			log.Fatalf("启动Kafka消费者失败: %v", err)
+		}
+		defer kafkaConsumer.Stop()
+	}
+
 	// 启动gRPC服务器（这会同时启动Raft服务器）
 	go func() {
 		if err := grpcServer.Start(); err != nil {
